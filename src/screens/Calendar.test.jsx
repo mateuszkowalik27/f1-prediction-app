@@ -101,6 +101,9 @@ describe('Calendar screen', () => {
       await open({ 'results/2027-1.json': results })
       const li = (await screen.findByText('Wyścig')).closest('li')
       fireEvent.click(within(li).getByRole('button', { name: 'Wyniki' }))
+      expect(within(li).getByText('ANT')).toBeInTheDocument()        // oficjalny skrót zamiast imienia i nazwiska
+      expect(within(li).getByText('RUS')).toBeInTheDocument()        // brak kodu w danych: trzy litery nazwiska
+      expect(within(li).queryByText(/Antonelli/)).not.toBeInTheDocument()
       expect(within(li).getByText('1:30:00,123')).toBeInTheDocument()
       expect(within(li).getByText('+5,123')).toBeInTheDocument()
       expect(within(li).getByText('DNF')).toBeInTheDocument()

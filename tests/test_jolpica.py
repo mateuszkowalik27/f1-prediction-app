@@ -73,6 +73,8 @@ def test_standings_parsed():
     st = c.standings(2026)
     top = st.drivers[0]
     assert (top.id, top.position, top.points, top.wins) == ("antonelli", 1, 390.0, 9)
+    assert (top.code, top.number) == ("ANT", 12)                       # skrót i numer startowy kierowcy
+    assert next(d for d in st.drivers if d.id == "hamilton").code == "HAM"
     assert st.constructors[0].id == "mercedes"
     assert st.constructors[0].points == 652.0
 
