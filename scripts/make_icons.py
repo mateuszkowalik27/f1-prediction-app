@@ -1,7 +1,9 @@
 """Rysuje ikony aplikacji: wykres w tle i duża flaga w szachownicę na środku.
 
 Uruchom:  .venv/bin/python scripts/make_icons.py   (wymaga Pillow: .venv/bin/pip install pillow)
-Z jednej geometrii powstają: public/icons/*.png oraz public/favicon.svg.
+Z jednej geometrii powstają: public/icons/*-v2.png oraz public/favicon.svg.
+Nazwy mają sufiks -v2: zmiana nazwy zmienia manifest, co zmusza Chrome na Androidzie do zbudowania aplikacji z nową ikoną
+(przy tej samej nazwie używa gotowego pakietu ze starą). Przy kolejnej zmianie ikony podbij sufiks (-v3).
 """
 import math
 from pathlib import Path
@@ -148,9 +150,9 @@ def svg():
 if __name__ == "__main__":
     out = ROOT / "public" / "icons"
     out.mkdir(parents=True, exist_ok=True)
-    render_png(512).save(out / "icon-512.png")
-    render_png(192).save(out / "icon-192.png")
-    render_png(180, rounded=False).save(out / "apple-touch-icon.png")             # iOS sam zaokrągla rogi
-    render_png(512, rounded=False, k=0.78).save(out / "icon-512-maskable.png")    # treść w "bezpiecznym" środku
+    render_png(512).save(out / "icon-512-v2.png")
+    render_png(192).save(out / "icon-192-v2.png")
+    render_png(180, rounded=False).save(out / "apple-touch-icon-v2.png")             # iOS sam zaokrągla rogi
+    render_png(512, rounded=False, k=0.78).save(out / "icon-512-maskable-v2.png")    # treść w "bezpiecznym" środku
     (ROOT / "public" / "favicon.svg").write_text(svg(), encoding="utf-8")
     print("ikony zapisane w", out)

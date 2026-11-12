@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
+      includeAssets: ['favicon.svg', 'icons/apple-touch-icon-v2.png'],
       manifest: {
         name: 'F1 Prediction App',
         short_name: 'F1 Predict',
@@ -21,9 +21,9 @@ export default defineConfig({
         background_color: '#0f1115',
         theme_color: '#e10600',
         icons: [
-          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icons/icon-192-v2.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512-v2.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-512-maskable-v2.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
