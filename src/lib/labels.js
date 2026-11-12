@@ -8,6 +8,7 @@ export const FACTOR_LABELS = {
   car_track_fit: 'dopasowanie bolidu do toru',
   wet_skill: 'jazda w deszczu',
   reliability: 'niezawodność',
+  quali_gap: 'różnica czasów w kwalifikacjach',
   grid_base_weight: 'siła pozycji startowej',
   race_noise_base: 'poziom losowości',
 }

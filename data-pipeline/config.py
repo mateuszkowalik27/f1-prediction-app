@@ -16,6 +16,7 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "car_track_fit": 0.05,
     "wet_skill": 0.05,
     "reliability": 0.10,
+    "quali_gap": 0.10,
 }
 # Dostrojone testem wstecznym na sezonie 2026 (rundy 1-20, siatka znana, 10 000 symulacji; próbka uczona = oceniana,
 # dlatego wybrano płaski fragment, a nie skrajny punkt). Błąd Briera zwycięzcy: 0,0361 -> 0,0246 (losowo: 0,0434);
@@ -35,6 +36,7 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "car_track_fit": (0.01, 0.15),
     "wet_skill": (0.01, 0.15),
     "reliability": (0.02, 0.25),
+    "quali_gap": (0.02, 0.30),
     "grid_base_weight": (0.3, 1.6),
     "race_noise_base": (0.3, 1.5),
 }
@@ -96,3 +98,10 @@ CAL_TAU_GRID = [round(0.6 + 0.05 * i, 2) for i in range(21)]  # 0,60 ... 1,60
 #   Brier szans na wygraną: 2024 = 0,0368, 2025 = 0,0328, 2026 = 0,0270 (losowanie ~0,043).
 #   Kalibracja: tau = 0,75 na 68 przewidywaniach poza próbką (0,03248 -> 0,03214): model lekko zbyt pewny siebie.
 #   Bramka każdego nowego czynnika porównuje się z tymi liczbami (python data-pipeline/oos.py --factor NAZWA).
+
+# Czynniki z agregatów (model v2)
+AGGREGATE_MIN_RACES = 3   # tyle agregatów z danymi trzeba mieć, żeby czynnik się włączył
+QUALI_GAP_CLIP = 7.0      # strata w kwalifikacjach powyżej tylu % jest przycinana (nieudane okrążenie, awaria)
+
+# Bramka quali_gap (2026-11-12, poza próbką, Brier z czynnikiem / bez): 2024 0,03628/0,03677, 2025 0,03355/0,03277,
+#   2026 0,02649/0,02699; średnio 0,03210/0,03218 -> ZOSTAJE (lepszy w 2 z 3 sezonów), ale zysk jest bardzo mały (~0,25%).
