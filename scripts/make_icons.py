@@ -22,11 +22,23 @@ FLAG_X, FLAG_Y, COLS, ROWS, CW, CH, WAVE = POLE_X, 178, 6, 4, 38, 38, 9
 FLAG_ANGLE = 45  # stopnie, przeciwnie do ruchu wskazówek zegara (flaga zadarta w górę w prawo)
 
 
-def rot(points):
-    """Obraca całą flagę (z drzewcem) wokół środka ikony."""
+def _rot_raw(points):
     t = math.radians(FLAG_ANGLE)
     c, s = math.cos(t), math.sin(t)
     return [(S / 2 + (x - S / 2) * c + (y - S / 2) * s, S / 2 - (x - S / 2) * s + (y - S / 2) * c) for x, y in points]
+
+
+def _centering_offset():
+    """O ile przesunąć obróconą flagę z drzewcem, żeby środek jej obrysu wypadł w środku ikony."""
+    pts = _rot_raw(flag_outline() + [(POLE_X, POLE_TOP), (POLE_X, POLE_BOTTOM)])
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return S / 2 - (min(xs) + max(xs)) / 2, S / 2 - (min(ys) + max(ys)) / 2
+
+
+def rot(points):
+    """Obraca całą flagę (z drzewcem) wokół środka ikony i centruje jej obrys w kwadracie."""
+    dx, dy = _centering_offset()
+    return [(x + dx, y + dy) for x, y in _rot_raw(points)]
 
 
 def wave(col):
