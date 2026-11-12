@@ -134,3 +134,20 @@ Po każdym etapie decyzja według reguły z 2.2: zostawiamy albo wyłączamy.
 - Dokładna korekta na paliwo przy pomiarze zużycia.
 - Próg "wysokiego zużycia toru" dla strategii.
 - Rozmiar budżetu backfillu na uruchomienie (N wyścigów).
+
+## 9. Wyniki (2026-11-12)
+
+Bramka poza próbką (Brier szans na wygraną, średnio z sezonów testowych 2024–2026, z czynnikiem / bez; reguła z 2.2):
+
+| Zmienna | Wynik | Decyzja |
+|---|---|---|
+| Kary na starcie (oficjalna siatka OpenF1) | nie podlega bramce (zmiana danych wejściowych) | wdrożone; OpenF1 `starting_grid` potwierdzone jako siatka z karami na 5 wyścigach |
+| `quali_gap` | 0,03210 / 0,03218 | zostaje (zysk bardzo mały) |
+| `pit_stop` | 0,03129 / 0,03210 | zostaje (lepszy w 3 z 3 sezonów) |
+| `race_vs_quali` | 0,03186 / 0,03128 | wypadł |
+| `tyre_deg_fit` | 0,03128 / 0,03129 | wypadł (remis, gorszy w 2 z 3 sezonów) |
+| `temp_fit` | 0,03173 / 0,03129 | wypadł |
+
+Odstępstwa od speca: `race_vs_quali` liczone na poziomie kierowcy (agregaty nie zapamiętują zespołu z danego wyścigu);
+w teście wstecznym prognozę temperatury zastępuje faktyczna temperatura powietrza z wyścigu; kalibracja jest stosowana
+tylko po kwalifikacjach.

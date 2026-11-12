@@ -84,6 +84,36 @@ npm run dev         # podgląd na http://localhost:5173
 npm run build       # wersja produkcyjna do katalogu dist
 ```
 
+## Model v2: historia, kary na starcie i nowe zmienne
+
+- **Historia wyścigów** (`public/data/history/`): dla każdego zakończonego wyścigu od 2022 roku robot raz liczy i zapisuje
+  cechy (strata w kwalifikacjach, czasy pit stopów, tempo wyścigowe, zużycie opon, temperatura, oficjalna siatka).
+  Uzupełnia je stopniowo (kilka wyścigów na uruchomienie, żeby mieścić się w limitach API). Ręcznie:
+  `.venv/bin/python data-pipeline/backfill.py --out public/data --budget 30`.
+- **Kary na starcie:** po kwalifikacjach robot bierze oficjalną siatkę z OpenF1 (z karami i startami z alei serwisowej).
+  Na ekranie Weekend pojawia się karta „Kary na starcie". Przed kwalifikacjami kar nie zgadujemy.
+- **Uczciwa ocena nowych zmiennych:** każda zmienna przechodzi „bramkę poza próbką": wagi dla danego sezonu są
+  strojone tylko na wcześniejszych, a wynik z czynnikiem porównuje się z wynikiem bez niego
+  (`.venv/bin/python data-pipeline/oos.py --factor NAZWA`). Zmienna zostaje, gdy średnio poprawia wynik i pogarsza go w
+  najwyżej jednym z trzech sezonów testowych (2024–2026). Wyniki bazowe: `public/data/oos.json`.
+- **Kalibracja szans:** `.venv/bin/python data-pipeline/calibrate.py` dopasowuje jeden parametr, który spłaszcza lub
+  wyostrza szanse na wygraną (plik `public/data/calibration.json`). Stosowana jest dopiero po kwalifikacjach, gdy znamy siatkę.
+- **Zużycie opon wpływa na strategię:** na torach o dużym zużyciu wariant alternatywny ma dodatkowy postój, a pewność
+  strategii spada o jeden stopień.
+
+### Wyniki bramek (Brier poza próbką, średnio z czynnikiem / bez, mniej = lepiej)
+
+| Czynnik | Wynik | Decyzja |
+|---|---|---|
+| `quali_gap` (strata w kwalifikacjach) | 0,03210 / 0,03218 | zostaje, ale zysk bardzo mały |
+| `pit_stop` (czas pit stopów) | 0,03129 / 0,03210 | zostaje (lepszy w 3 z 3 sezonów) |
+| `race_vs_quali` (tempo wyścigowe vs kwalifikacyjne) | 0,03186 / 0,03128 | wypadł (waga 0) |
+| `tyre_deg_fit` (zużycie opon dopasowane do toru) | 0,03128 / 0,03129 | wypadł (waga 0) |
+| `temp_fit` (temperatura) | 0,03173 / 0,03129 | wypadł (waga 0) |
+
+Czynniki, które wypadły, zostają w kodzie z wagą 0 i wpisem w `LOCKED_WEIGHTS` (`config.py`): można je wrócić, gdy
+będzie więcej wyścigów. Uwaga: `pit_stop` może częściowo wynikać z tego, że najlepsze zespoły mają też najlepsze załogi.
+
 ## Ograniczenia, o których warto wiedzieć
 
 - **Poprawki bolidów model widzi dopiero po piątkowych treningach** (przez zmianę tempa zespołu). Wcześniej nie wie,
@@ -96,9 +126,16 @@ npm run build       # wersja produkcyjna do katalogu dist
 - **Predykcje to prawdopodobieństwa.** Faworyt z 40% szans przegrywa w 60% wyścigów.
 - **Skład kierowców.** Przed pierwszym wyścigiem sezonu pochodzi z poprzedniego roku (aplikacja o tym ostrzega).
   Po kwalifikacjach bierze prawdziwy skład z ich wyników, razem z zastępstwami i zmianami zespołów.
-- **Ocena trafności jest optymistyczna.** Test wsteczny w `model.json` w którym wagi są dostrajane na tych
-  samych wyścigach, na których model oceniamy. Uczciwsza jest sekcja „Przewidywania, które faktycznie widziałeś":
-  prognoza zapisana tuż przed startem i porównana z wynikiem. Zapisuje się w `model.json` (pole `live_evaluation`) po pierwszych wyścigach z robotem.
+- **Ocena trafności.** Wartości w `public/data/oos.json` są liczone poza próbką (wagi dla sezonu nie widzą tego
+  sezonu), ale to nadal tylko ok. 70 wyścigów, a szum jest duży. Uczciwa miara to „Przewidywania, które faktycznie
+  widziałeś" (`live_evaluation` w `model.json`): prognoza zapisana tuż przed startem i porównana z wynikiem; pojawi
+  się po pierwszych wyścigach z robotem.
+- **Historia z OpenF1 zaczyna się w 2023 roku**, więc zmienne z okrążeń, opon, temperatury i oficjalnej siatki mają
+  krótszą historię niż wyniki z Jolpica (od 2022).
+- **Temperatura w modelu to temperatura powietrza** (prognoza podaje powietrze, nie tor); temperaturę toru zapisujemy
+  tylko do oszacowania zużycia opon.
+- **Kary na starcie** uwzględniamy dopiero po kwalifikacjach. Nie sprawdzono jeszcze, jak szybko po nich OpenF1
+  udostępnia oficjalną siatkę przed prawdziwym wyścigiem.
 - **Poza sezonem** (grudzień-marzec) klasyfikacja pokazuje ostatnią zakończoną tabelę z oznaczeniem sezonu.
 - Jolpica ma limit ok. 200 zapytań na godzinę. Robot zapamiętuje dane zakończonych sezonów w cache GitHub Actions,
   żeby się w nim mieścić.
