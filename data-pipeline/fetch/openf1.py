@@ -46,11 +46,12 @@ def _compound_at(stints: list[dict], driver_number: int, lap_number: int) -> str
 
 
 class OpenF1Client:
-    def __init__(self, http: httpx.Client | None = None, min_interval: float = 0.4, sleep=time.sleep):
+    def __init__(self, http: httpx.Client | None = None, min_interval: float = 0.5, sleep=time.sleep):
         self._http = http or httpx.Client(timeout=60)
         self._min_interval = min_interval  # API: maks. 3 zapytania na sekundę
         self._sleep = sleep
         self._last = 0.0
+        self.errors = 0   # ile razy źródło zawiodło (nie: brak danych); pozwala odróżnić awarię od legalnej pustki
 
     def _get(self, path: str, query: dict) -> list[dict]:
         qs = "&".join(f"{k}={quote(str(v), safe=':-')}" for k, v in query.items())
@@ -107,6 +108,7 @@ class OpenF1Client:
                 runs.setdefault(driver_id, []).append((compound, statistics.median(sorted(durations)[:3])))
             return PracticeData(best_runs=runs) if runs else None
         except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError):
+            self.errors += 1
             return None
 
     def _race_sessions(self, races: list[HistoricRace]):
@@ -117,6 +119,7 @@ class OpenF1Client:
             try:
                 found = [s for s in self._sessions(r.date, before=0, after=0) if s["session_name"] == "Race"]
             except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError):
+                self.errors += 1
                 continue
             if found:
                 yield r, found[0]["session_key"]
@@ -127,6 +130,7 @@ class OpenF1Client:
             try:
                 rows = self._get("/race_control", {"session_key": key, "category": "SafetyCar"})
             except (OpenF1Unavailable, httpx.HTTPError, ValueError):
+                self.errors += 1
                 continue
             events = out.setdefault(r.season, [])
             for row in rows:
@@ -143,6 +147,7 @@ class OpenF1Client:
             try:
                 stints = self._get("/stints", {"session_key": key})
             except (OpenF1Unavailable, httpx.HTTPError, ValueError):
+                self.errors += 1
                 continue
             per_driver: dict[int, int] = {}
             for st in stints:
@@ -180,6 +185,7 @@ class OpenF1Client:
             speeds = [float(r["speed"]) for r in sorted(rows, key=lambda r: r["date"])]
             return speeds if len(speeds) >= MIN_SPEED_SAMPLES else None
         except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError):
+            self.errors += 1
             return None
 
     # --- model v2: okrążenia wyścigu i pogoda ---
@@ -220,6 +226,7 @@ class OpenF1Client:
                 ))
             return records or None
         except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
+            self.errors += 1
             return None
 
     def race_weather(self, race: Race) -> WeatherSample | None:
@@ -235,6 +242,7 @@ class OpenF1Client:
                 return None
             return WeatherSample(air_c=statistics.median(air), track_c=statistics.median(track) if track else None)
         except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
+            self.errors += 1
             return None
 
     def starting_grid(self, race: Race, entries: list[DriverEntry]) -> dict[str, int] | None:
@@ -258,4 +266,5 @@ class OpenF1Client:
                     for r in rows if num_to_id.get(r.get("driver_number"))}
             return grid or None
         except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
+            self.errors += 1
             return None

@@ -93,3 +93,10 @@ def test_aggregate_fields_are_filled_from_sources():
     assert (agg.air_temp_c, agg.track_temp_c) == (21.0, 33.0)
     assert agg.official_grid == {"d1": 2, "d2": 1}
     assert agg.circuit_id == "c"
+
+
+def test_transient_openf1_error_that_returns_none_is_failed_not_missing(tmp_path):
+    f1 = FakeOpenF1(transient=True)                     # metoda zwraca None, ale licznik błędów rośnie
+    store = HistoryStore(tmp_path)
+    report = ensure_aggregates(store, clients(completed=2, openf1=f1), [2027], budget=10)
+    assert report.created == 0 and report.retry_later == 2 and store.all() == []

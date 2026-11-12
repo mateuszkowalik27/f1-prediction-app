@@ -267,3 +267,21 @@ def test_starting_grid_none_on_http_error():
 def test_starting_grid_none_without_qualifying_session():
     only_race = [sess(11412, "Race", "2024-05-26")]
     assert grid_client(sessions=only_race).starting_grid(race(), grid_entries()) is None
+
+
+# --- licznik błędów: odróżnia "brak danych" od "źródło chwilowo nie działa" ---
+def test_errors_counter_counts_unavailable_but_not_empty_results():
+    c = make_client({"/sessions": lambda q: (500, {})})
+    assert c.errors == 0
+    assert c.race_laps(race(), ENTRIES) is None
+    assert c.errors == 1                                    # awaria serwera
+
+    empty = make_client({})                                 # 404 "No results found" = legalny brak danych
+    assert empty.race_laps(race(), ENTRIES) is None and empty.race_weather(race()) is None
+    assert empty.errors == 0
+
+
+def test_errors_counter_increments_for_each_failing_public_method():
+    c = make_client({"/sessions": lambda q: (500, {})})
+    c.race_laps(race(), ENTRIES); c.race_weather(race()); c.starting_grid(race(), ENTRIES)
+    assert c.errors == 3

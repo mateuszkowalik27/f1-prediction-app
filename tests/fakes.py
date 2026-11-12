@@ -93,15 +93,20 @@ class FakeJolpica:
 
 
 class FakeOpenF1:
-    def __init__(self, practice=None, broken=False, laps=None, weather=None, grid=None):
+    def __init__(self, practice=None, broken=False, laps=None, weather=None, grid=None, transient=False):
         self.practice = practice
         self.broken = broken
+        self.transient = transient            # udaje chwilową awarię: zwraca None, ale zwiększa licznik błędów
+        self.errors = 0
         self.laps, self.weather, self.grid = laps, weather, grid
         self.trace_requests = []
         self.calls = []                       # nazwy wywołanych nowych metod (model v2)
 
     def race_laps(self, race, entries):
         self.calls.append("race_laps")
+        if self.transient:
+            self.errors += 1
+            return None
         if self.broken:
             raise KeyError("lap_duration")
         return self.laps

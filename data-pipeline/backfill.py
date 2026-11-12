@@ -43,6 +43,7 @@ def build_aggregates(race: HistoricRace, entries: list[DriverEntry], clients: "C
     track_deg = air = track_temp = official = None
     openf1_status = "missing"
     if race.season >= config.OPENF1_FIRST_SEASON:
+        errors_before = getattr(f1, "errors", 0)
         weekend = race_from_history(race)
         laps, failed_laps = optional("okrążenia wyścigu (OpenF1)", f1.race_laps, weekend, entries)
         weather, failed_weather = optional("pogoda wyścigu (OpenF1)", f1.race_weather, weekend)
@@ -52,7 +53,9 @@ def build_aggregates(race: HistoricRace, entries: list[DriverEntry], clients: "C
             tyre_deg, track_deg = compute_tyre_deg(laps, team_of)
         if weather:
             air, track_temp = weather.air_c, weather.track_c
-        if failed_laps or failed_weather or failed_grid:
+        # klient zwraca None zarówno przy braku danych, jak i przy awarii: odróżnia je licznik błędów
+        errored = getattr(f1, "errors", 0) > errors_before
+        if failed_laps or failed_weather or failed_grid or errored:
             openf1_status = "failed"
         elif laps or weather or official:
             openf1_status = "ok"
