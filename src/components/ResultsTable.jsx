@@ -14,6 +14,7 @@ export default function ResultsTable({ table, nameById = {}, numberById = {} }) 
   // najlepszy czas w każdej części kwalifikacji: do niego liczymy stratę
   const best = ['q1', 'q2', 'q3'].map((q) => Math.min(...rows.map((r) => r[q]).filter((t) => t != null)))
   return (
+    <div className="table-scroll" tabIndex={0} role="region" aria-label="Wyniki sesji (przewiń w bok)">
     <table className="results">
       <thead>
         <tr>
@@ -49,5 +50,6 @@ export default function ResultsTable({ table, nameById = {}, numberById = {} }) 
         })}
       </tbody>
     </table>
+    </div>
   )
 }

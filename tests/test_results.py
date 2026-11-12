@@ -31,13 +31,27 @@ def test_sessions_that_have_not_happened_are_left_out():
     assert build_results(future, NOW, clients(openf1=FakeOpenF1()), None) is None
 
 
-def test_session_that_just_ended_is_not_frozen_yet():
-    start = NOW - timedelta(hours=1, minutes=30)                  # trening trwa godzinę, +2 h zwłoki
-    race = weekend(start=start, names=("FP1",))
+def test_results_appear_minutes_after_the_session_ends_not_before():
     c = clients(openf1=FakeOpenF1())
     c.openf1.practice_tables = {"FP1": FP}
+    start = NOW - timedelta(hours=1, minutes=5)                   # trening trwa godzinę: skończył się 5 min temu
+    race = weekend(start=start, names=("FP1",))
     assert build_results(race, NOW, c, None) is None
-    assert build_results(race, NOW + timedelta(hours=2), c, None) is not None
+    assert "FP1" in build_results(race, NOW + timedelta(minutes=6), c, None).sessions
+
+
+def test_fresh_table_is_refreshed_until_it_settles_and_then_left_alone():
+    f1 = FakeOpenF1()
+    f1.practice_tables = {"FP1": FP}
+    c = clients(openf1=f1)
+    race = weekend(start=NOW - timedelta(hours=1, minutes=30), names=("FP1",))      # skończył się 30 min temu
+    first = build_results(race, NOW, c, None)
+    more = SessionTable(kind="practice", rows=FP.rows + [SessionRow(driver_id="d2", position=2, best_s=80.0)])
+    f1.practice_tables = {"FP1": more}
+    refreshed = build_results(race, NOW + timedelta(minutes=10), c, first)
+    assert len(refreshed.sessions["FP1"].rows) == 2                 # źródło dopisało drugiego kierowcę
+    final = build_results(race, NOW + timedelta(hours=4), c, refreshed)            # ostatnie odświeżenie po czasie na ustabilizowanie
+    assert build_results(race, NOW + timedelta(hours=5), c, final) is None          # od teraz bez zmian
 
 
 def test_existing_tables_are_kept_and_not_refetched():

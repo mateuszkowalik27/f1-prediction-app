@@ -308,6 +308,7 @@ class SessionRow(BaseModel):
 class SessionTable(BaseModel):
     kind: Literal["practice", "qualifying", "race"]
     rows: list[SessionRow]
+    fetched_at: datetime | None = None    # kiedy pobrano; świeże tabele odświeżamy jeszcze przez kilka godzin (źródła dopisują dane)
 
 
 class RoundResults(BaseModel):

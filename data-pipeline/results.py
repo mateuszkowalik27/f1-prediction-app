@@ -1,14 +1,14 @@
 """Wyniki zakończonych sesji weekendu (public/data/results/<sezon>-<runda>.json), pokazywane w Kalendarzu.
 
-Raz zapisanej tabeli sesji nie przeliczamy. Sesji kończącej się przed chwilą nie ruszamy (RESULTS_DELAY): źródła
-dopisują dane z opóźnieniem, a zamrożenie połowicznych wyników byłoby na stałe. Awaria któregokolwiek źródła
-tylko pomija daną sesję: to dodatek do prognoz, nie warunek ich działania.
+Wyniki pojawiają się kilka minut po końcu sesji (RESULTS_DELAY_MINUTES) i są odświeżane przez RESULTS_SETTLE_HOURS,
+bo źródła dopisują dane z opóźnieniem; potem tabela zostaje już jak jest. Awaria któregokolwiek źródła tylko pomija
+daną sesję: to dodatek do prognoz, nie warunek ich działania.
 """
 from __future__ import annotations
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -35,20 +35,36 @@ def load_results(path: Path) -> RoundResults | None:
         return None
 
 
-def _ended(race: Race, name: str, now: datetime) -> bool:
+def _end(race: Race, name: str) -> datetime | None:
     session = next((s for s in race.sessions if s.name == name), None)
     if session is None or session.start_utc is None:
-        return False
-    end = session.start_utc + timedelta(hours=SESSION_LENGTH[name]) + timedelta(hours=config.RESULTS_DELAY_HOURS)
-    return end <= now
+        return None
+    return session.start_utc + timedelta(hours=SESSION_LENGTH[name])
+
+
+def _due(race: Race, existing: RoundResults | None, now: datetime) -> list[str]:
+    """Sesje, dla których trzeba (znów) pobrać wyniki: brakujące po końcu sesji albo jeszcze świeże (do ustabilizowania)."""
+    have = existing.sessions if existing else {}
+    tried = existing.attempts if existing else {}
+    due = []
+    for s in race.sessions:
+        end = _end(race, s.name)
+        if end is None or end + timedelta(minutes=config.RESULTS_DELAY_MINUTES) > now:
+            continue
+        table = have.get(s.name)
+        if table is None:
+            if tried.get(s.name, 0) < config.RESULTS_MAX_ATTEMPTS:
+                due.append(s.name)
+        elif table.fetched_at is not None and table.fetched_at < end + timedelta(hours=config.RESULTS_SETTLE_HOURS):
+            due.append(s.name)          # pobrane tuż po sesji: odświeżamy, dopóki źródła mogą coś dopisywać
+    return due
 
 
 def build_results(race: Race, now: datetime, clients: "Clients", existing: RoundResults | None) -> RoundResults | None:
     """Dokłada tabele brakujących, zakończonych sesji do już zapisanych. None = nic nowego."""
     have = dict(existing.sessions) if existing else {}
     tried = dict(existing.attempts) if existing else {}
-    due = [s.name for s in race.sessions
-           if s.name not in have and _ended(race, s.name, now) and tried.get(s.name, 0) < config.RESULTS_MAX_ATTEMPTS]
+    due = _due(race, existing, now)
     if not due:
         return None
     j, f1 = clients.jolpica, clients.openf1
@@ -73,8 +89,9 @@ def build_results(race: Race, now: datetime, clients: "Clients", existing: Round
         for name, table in (laps or {}).items():
             if name in due:
                 new[name] = table
+    new = {name: table.model_copy(update={"fetched_at": now}) for name, table in new.items()}
     for name in due:
-        if name not in new:
+        if name not in new and name not in have:
             tried[name] = tried.get(name, 0) + 1
     if not new and tried == (existing.attempts if existing else {}):
         return None
@@ -90,9 +107,7 @@ def update_results(out_dir: Path, calendar: list[Race], clients: "Clients", now:
             break
         path = results_path(out_dir, race.season, race.round)
         existing = load_results(path)
-        have, counts = (existing.sessions, existing.attempts) if existing else ({}, {})
-        if not any(s.name not in have and _ended(race, s.name, now) and counts.get(s.name, 0) < config.RESULTS_MAX_ATTEMPTS
-                   for s in race.sessions):
+        if not _due(race, existing, now):
             continue
         tried += 1
         updated = build_results(race, now, clients, existing)
@@ -104,3 +119,29 @@ def update_results(out_dir: Path, calendar: list[Race], clients: "Clients", now:
         os.replace(tmp, path)
         written += 1
     return written
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Lekki przebieg samych wyników sesji (uruchamiany często w weekend wyścigowy, osobno od pełnych prognoz)."""
+    import argparse
+
+    from run import default_clients, resolve_season
+
+    parser = argparse.ArgumentParser(description="Wyniki zakończonych sesji do Kalendarza")
+    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--season", type=int, default=None, help="domyślnie: bieżący sezon")
+    args = parser.parse_args(argv)
+    now = datetime.now(timezone.utc)
+    try:
+        season = args.season or resolve_season(now, default_clients(now.year).jolpica)
+        clients = default_clients(season)
+        written = update_results(args.out, clients.jolpica.calendar(season), clients, now)
+    except JolpicaError as exc:
+        print(f"BŁĄD: {exc}. Nic nie zapisano.", file=sys.stderr)
+        return 1
+    print(f"Zapisano wyników: {written}.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

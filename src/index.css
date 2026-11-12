@@ -103,7 +103,12 @@ td.num, th.num { text-align: right; }
 .session-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .session-meta { display: flex; align-items: center; gap: 8px; text-align: right; }
 .results-toggle { white-space: nowrap; font: inherit; font-size: 0.8rem; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; }
-table.results { margin-top: 8px; font-size: 0.78rem; }
+/* wąski ekran: tabela przewija się w bok, a numer i nazwisko kierowcy zostają na miejscu */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 8px; }
+table.results { min-width: 100%; width: max-content; font-size: 0.78rem; }
+table.results th:nth-child(1), table.results td:nth-child(1) { position: sticky; left: 0; background: var(--surface); }
+table.results th:nth-child(2), table.results td:nth-child(2) { position: sticky; left: 1.8em; background: var(--surface); }
+table.results td, table.results th { white-space: nowrap; }
 table.results td, table.results th { padding: 5px 3px; }
 table.results td:nth-child(2) { white-space: nowrap; }
 table.results .car-no { margin-right: 5px; }

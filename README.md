@@ -118,8 +118,11 @@ będzie więcej wyścigów. Uwaga: `pit_stop` może częściowo wynikać z tego,
 
 Po rozwinięciu rundy zakończone sesje mają przycisk „Wyniki": treningi i kwalifikacje sprintu (najlepszy czas
 kierowcy, z OpenF1), kwalifikacje (Q1, Q2, Q3), sprint i wyścig (czas zwycięzcy, straty, DNF z powodem; z Jolpica).
-Robot zapisuje je do `public/data/results/<sezon>-<runda>.json` (tylko bieżący sezon), po 2 godzinach od końca
-sesji, i ponawia brakujące do 6 razy na sesję. Sesji, które się nie odbyły, nie dotyka.
+Osobny, lekki workflow (`update-results.yml`) sprawdza to co 10 minut w piątek-niedzielę i zapisuje wyniki do
+`public/data/results/<sezon>-<runda>.json` (tylko bieżący sezon) 10 minut po końcu sesji. Przez 3 godziny odświeża je,
+bo źródła dopisują dane z opóźnieniem, potem tabela zostaje. Brakujące ponawia do 6 razy na sesję. GitHub nie
+gwarantuje punktualności crona, więc wyniki bywają kilka-kilkanaście minut później. Sesji, które się nie odbyły, nie
+dotyka. Tabele na wąskim ekranie przewijają się w bok.
 
 ## Ograniczenia, o których warto wiedzieć
 
