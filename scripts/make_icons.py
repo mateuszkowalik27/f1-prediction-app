@@ -15,8 +15,18 @@ S = 512
 
 CHART = [(30, 392), (110, 336), (180, 366), (262, 290), (340, 318), (420, 204), (486, 150)]
 GRID_Y = [110, 190, 270, 350, 430]
-POLE_X, POLE_TOP, POLE_BOTTOM = 142, 158, 432
+POLE_X, POLE_TOP, POLE_BOTTOM = 142, 158, 412
 FLAG_X, FLAG_Y, COLS, ROWS, CW, CH, WAVE = POLE_X, 178, 6, 4, 38, 38, 9
+
+
+FLAG_ANGLE = 45  # stopnie, przeciwnie do ruchu wskazówek zegara (flaga zadarta w górę w prawo)
+
+
+def rot(points):
+    """Obraca całą flagę (z drzewcem) wokół środka ikony."""
+    t = math.radians(FLAG_ANGLE)
+    c, s = math.cos(t), math.sin(t)
+    return [(S / 2 + (x - S / 2) * c + (y - S / 2) * s, S / 2 - (x - S / 2) * s + (y - S / 2) * c) for x, y in points]
 
 
 def wave(col):
@@ -78,17 +88,18 @@ def render_png(size, rounded=True, k=1.0, ss=4):
     base = Image.alpha_composite(base, layer(line))
 
     def shadow(d):
-        d.polygon([(x + 5 * f * k, y + 7 * f * k) for x, y in P(flag_outline())], fill=(0, 0, 0, 120))
+        d.polygon([(x + 5 * f * k, y + 7 * f * k) for x, y in P(rot(flag_outline()))], fill=(0, 0, 0, 120))
     base = Image.alpha_composite(base, layer(shadow))
 
     def flag(d):
         pw = 11 * f * k
-        (x0, y0), (x1, y1) = P([(POLE_X, POLE_TOP), (POLE_X, POLE_BOTTOM)])
+        (x0, y0), (x1, y1) = P(rot([(POLE_X, POLE_TOP), (POLE_X, POLE_BOTTOM)]))
         d.line([(x0, y0), (x1, y1)], fill=WHITE + (255,), width=int(pw))
         d.ellipse([x0 - pw * 0.75, y0 - pw * 0.75, x0 + pw * 0.75, y0 + pw * 0.75], fill=WHITE + (255,))
         for pts, color in flag_cells():
-            d.polygon(P(pts), fill=color + (255,))
-        d.line(P(flag_outline()) + [P(flag_outline())[0]], fill=WHITE + (255,), width=int(5 * f * k), joint="curve")
+            d.polygon(P(rot(pts)), fill=color + (255,))
+        outline = P(rot(flag_outline()))
+        d.line(outline + [outline[0]], fill=WHITE + (255,), width=int(5 * f * k), joint="curve")
     base = Image.alpha_composite(base, layer(flag))
 
     if rounded:
@@ -111,12 +122,13 @@ def svg():
     area = CHART + [(CHART[-1][0], 452), (CHART[0][0], 452)]
     parts.append(f'<polygon points="{pts(area)}" fill="rgb{RED}" fill-opacity=".37"/>')
     parts.append(f'<polyline points="{pts(CHART)}" fill="none" stroke="rgb{RED_LIGHT}" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>')
-    shifted = [(x + 5, y + 7) for x, y in flag_outline()]
+    shifted = [(x + 5, y + 7) for x, y in rot(flag_outline())]
     parts.append(f'<polygon points="{pts(shifted)}" fill="#000" fill-opacity=".47"/>')
-    parts.append(f'<line x1="{POLE_X}" y1="{POLE_TOP}" x2="{POLE_X}" y2="{POLE_BOTTOM}" stroke="rgb{WHITE}" stroke-width="11" stroke-linecap="round"/>')
+    (px0, py0), (px1, py1) = rot([(POLE_X, POLE_TOP), (POLE_X, POLE_BOTTOM)])
+    parts.append(f'<line x1="{px0:.1f}" y1="{py0:.1f}" x2="{px1:.1f}" y2="{py1:.1f}" stroke="rgb{WHITE}" stroke-width="11" stroke-linecap="round"/>')
     for cell, color in flag_cells():
-        parts.append(f'<polygon points="{pts(cell)}" fill="rgb{color}"/>')
-    parts.append(f'<polygon points="{pts(flag_outline())}" fill="none" stroke="rgb{WHITE}" stroke-width="5" stroke-linejoin="round"/>')
+        parts.append(f'<polygon points="{pts(rot(cell))}" fill="rgb{color}"/>')
+    parts.append(f'<polygon points="{pts(rot(flag_outline()))}" fill="none" stroke="rgb{WHITE}" stroke-width="5" stroke-linejoin="round"/>')
     parts.append("</svg>")
     return "\n".join(parts)
 
