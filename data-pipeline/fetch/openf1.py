@@ -236,3 +236,26 @@ class OpenF1Client:
             return WeatherSample(air_c=statistics.median(air), track_c=statistics.median(track) if track else None)
         except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
             return None
+
+    def starting_grid(self, race: Race, entries: list[DriverEntry]) -> dict[str, int] | None:
+        """Oficjalna siatka startowa Z KARAMI (driver_id -> pozycja). W OpenF1 kluczem jest sesja KWALIFIKACJI.
+        Brak danych, błąd albo brak sesji -> None."""
+        try:
+            day = _race_day(race)
+            if day is None:
+                return None
+            qualifying = [s for s in self._sessions(day) if s["session_name"] == "Qualifying"]
+            if not qualifying:
+                return None
+            key = qualifying[-1]["session_key"]
+            rows = self._get("/starting_grid", {"session_key": key})
+            if not rows:
+                return None
+            code_to_id = {e.code: e.driver_id for e in entries}
+            num_to_id = {d["driver_number"]: code_to_id.get(d["name_acronym"])
+                         for d in self._get("/drivers", {"session_key": key})}
+            grid = {num_to_id[r["driver_number"]]: int(r["position"])
+                    for r in rows if num_to_id.get(r.get("driver_number"))}
+            return grid or None
+        except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
+            return None

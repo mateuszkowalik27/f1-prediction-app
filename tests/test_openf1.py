@@ -218,3 +218,52 @@ def test_race_weather_track_temp_is_optional():
 
 def test_race_weather_none_without_rows():
     assert weather_client([]).race_weather(race()) is None
+
+
+# --- oficjalna siatka startowa (model v2) ---
+def _fixture(name):
+    import json
+    from pathlib import Path
+    return json.loads((Path(__file__).parent / "fixtures" / name).read_text())
+
+
+def grid_client(grid=None, status=200, log=None, sessions=None):
+    drivers = _fixture("openf1_drivers_2026_r20.json")
+    rows = _fixture("openf1_starting_grid_2026_r20.json") if grid is None else grid
+    return make_client({
+        "/sessions": lambda q: (200, sessions if sessions is not None else
+                                [sess(11408, "Qualifying", "2024-05-25"), sess(11412, "Race", "2024-05-26")]),
+        "/drivers": lambda q: (200, drivers),
+        "/starting_grid": lambda q: (status, rows) if status == 200 else (status, {"detail": "x"}),
+    }, log)
+
+
+def grid_entries():
+    return [DriverEntry(driver_id=d["name_acronym"].lower(), code=d["name_acronym"], name=d["full_name"], team_id="t")
+            for d in _fixture("openf1_drivers_2026_r20.json")]
+
+
+def test_starting_grid_maps_codes_to_driver_ids():
+    grid = grid_client().starting_grid(race(), grid_entries())
+    assert grid["nor"] == 1                                   # numer 1 = NOR, pozycja 1 (prawdziwe dane)
+    assert sorted(grid.values()) == list(range(1, 23))
+
+
+def test_starting_grid_asks_for_the_qualifying_session():
+    log = []
+    grid_client(log=log).starting_grid(race(), grid_entries())
+    assert any("session_key=11408" in q for q in log)          # klucz sesji kwalifikacji...
+    assert not any("session_key=11412" in q for q in log)      # ...a nie wyścigu
+
+
+def test_starting_grid_none_when_endpoint_empty():
+    assert grid_client(status=404).starting_grid(race(), grid_entries()) is None
+
+
+def test_starting_grid_none_on_http_error():
+    assert grid_client(status=500).starting_grid(race(), grid_entries()) is None
+
+
+def test_starting_grid_none_without_qualifying_session():
+    only_race = [sess(11412, "Race", "2024-05-26")]
+    assert grid_client(sessions=only_race).starting_grid(race(), grid_entries()) is None
