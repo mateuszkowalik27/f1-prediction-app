@@ -6,10 +6,10 @@ import pytest
 import config
 from fakes import CALENDAR, ENTRIES, NOW, ROWS, FakeJolpica, FakeOpenF1, clients
 from fetch.jolpica import JolpicaError
-from helpers import hist_race
-from run import build_context, main, resolve_grid, run_pipeline, select_next_race
+from helpers import hist_race, make_entries
+from run import build_context, main, run_pipeline, select_next_race
 from schemas import (
-    Calendar, Meta, ModelPayload, PracticeData, Session, WeekendResponse, WeightSnapshot, WeightsFile,
+    Calendar, Meta, ModelPayload, PracticeData, Session, Standings, WeekendResponse, WeightSnapshot, WeightsFile,
 )
 
 UTC = timezone.utc
@@ -44,11 +44,12 @@ def test_jolpica_failure_leaves_files_untouched_and_exits_1(tmp_path):
     assert all((tmp_path / n).read_text() == "OLD" for n in names)
 
 
-def test_openf1_missing_marks_source_missing_and_skips_its_factors(tmp_path):
+def test_openf1_missing_marks_source_missing_skips_its_factors_and_flags_low_data(tmp_path):
     run_pipeline(tmp_path, 2027, NOW, clients())
     assert read(tmp_path, "meta.json", Meta).data_sources["openf1"] == "missing"
     payload = read(tmp_path, "weekend.json", WeekendResponse).payload
     assert "practice_pace" in payload.factors_skipped and "weekend_shift" in payload.factors_skipped
+    assert payload.low_data is True                  # spec: brak OpenF1 = "mało danych"
 
 
 def test_no_history_gives_low_data(tmp_path):
@@ -76,13 +77,15 @@ def test_context_excludes_future_rounds():
     assert sorted((h.season, h.round) for h in ctx.history) == [(2026, 24), (2027, 1), (2027, 2)]
 
 
-def test_resolve_grid_uses_actual_after_qualifying():
-    race, predicted = CALENDAR[2], {"d1": 1, "d2": 2, "d3": 3, "d4": 4}
-    actual = {"d4": 1, "d3": 2, "d2": 3, "d1": 4}
+def test_actual_qualifying_used_only_after_the_session():
+    from run import actual_qualifying
+    race = CALENDAR[2]
+    grid = {"d4": 1, "d3": 2, "d2": 3, "d1": 4}
     after = datetime(2027, 4, 10, 18, 0, tzinfo=UTC)
-    assert resolve_grid(race, after, FakeJolpica(grid=actual), predicted) == (actual, "actual")
-    assert resolve_grid(race, NOW, FakeJolpica(grid=actual), predicted) == (predicted, "predicted")
-    assert resolve_grid(race, after, FakeJolpica(grid=None), predicted) == (predicted, "predicted")
+    got_grid, got_entries = actual_qualifying(race, after, FakeJolpica(grid=grid))
+    assert got_grid == grid and sorted(e.driver_id for e in got_entries) == ["d1", "d2", "d3", "d4"]
+    assert actual_qualifying(race, NOW, FakeJolpica(grid=grid)) is None          # kwalifikacje jeszcze się nie odbyły
+    assert actual_qualifying(race, after, FakeJolpica(grid=None)) is None        # Jolpica jeszcze bez wyników
 
 
 def test_actual_qualifying_shown_after_session(tmp_path):
@@ -210,3 +213,79 @@ def test_resolve_season_stays_when_next_calendar_not_published():
     from run import resolve_season
     j = CalendarsOnly({2026: season_calendar(2026)})
     assert resolve_season(datetime(2026, 12, 20, tzinfo=UTC), j) == 2026
+
+
+def test_resolve_season_waits_a_week_after_the_last_race_so_results_are_final():
+    from run import resolve_season
+    j = CalendarsOnly({2026: season_calendar(2026), 2027: season_calendar(2027)})   # ostatni wyścig 2026-11-20
+    assert resolve_season(datetime(2026, 11, 25, tzinfo=UTC), j) == 2026            # 5 dni po: wyniki mogą się jeszcze zmienić
+    assert resolve_season(datetime(2026, 11, 28, tzinfo=UTC), j) == 2027            # ponad 7 dni po
+
+
+def test_weight_history_keeps_seasons_apart_and_does_not_retune_every_run(tmp_path):
+    from tuning import append_snapshot
+    old = append_snapshot(None, config.default_weights(), round=24, season=2026)
+    (tmp_path / "weights.json").write_text(old.model_dump_json())
+    for _ in range(2):
+        run_pipeline(tmp_path, 2027, NOW, clients(completed=3))
+    history = read(tmp_path, "weights.json", WeightsFile).history
+    assert [(s.season, s.round) for s in history] == [(2026, 24), (2027, 3)]    # druga runda bez ponownego strojenia
+
+
+def test_substitute_driver_seen_in_qualifying_replaces_the_driver_he_replaced(tmp_path):
+    sub = make_entries(("d1", "t1"), ("d2", "t1"), ("d3", "t2"), ("sub", "t2"))
+    grid = {"d3": 1, "d1": 2, "d2": 3, "sub": 4}
+    run_pipeline(tmp_path, 2027, datetime(2027, 4, 10, 18, 0, tzinfo=UTC), clients(grid=grid, quali_entries=sub))
+    payload = read(tmp_path, "weekend.json", WeekendResponse).payload
+    assert sorted(p.driver_id for p in payload.race_prediction) == ["d1", "d2", "d3", "sub"]
+    assert payload.lineup == "qualifying"
+
+
+def test_lineup_is_flagged_when_it_comes_from_the_previous_season(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients(entries_current=False))
+    assert read(tmp_path, "weekend.json", WeekendResponse).payload.lineup == "previous_season"
+    run_pipeline(tmp_path, 2027, NOW, clients())
+    assert read(tmp_path, "weekend.json", WeekendResponse).payload.lineup == "latest_race"
+
+
+def test_jolpica_failure_while_preparing_evaluation_leaves_files_untouched(tmp_path):
+    names = ["meta.json", "calendar.json", "standings.json", "weekend.json", "model.json"]
+    for n in names:
+        (tmp_path / n).write_text("OLD")
+    assert main(["--out", str(tmp_path), "--season", "2027"], clients=clients(fail_results=True)) == 1
+    assert all((tmp_path / n).read_text() == "OLD" for n in names)
+
+
+def test_broken_openf1_response_does_not_abort_the_update(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients(openf1=FakeOpenF1(broken=True)))
+    assert read(tmp_path, "meta.json", Meta).data_sources["openf1"] == "failed"
+    payload = read(tmp_path, "weekend.json", WeekendResponse).payload
+    assert payload.low_data is True and "practice_pace" in payload.factors_skipped
+    assert (tmp_path / "standings.json").exists()
+
+
+def test_weekend_tells_where_track_data_comes_from(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients())
+    payload = read(tmp_path, "weekend.json", WeekendResponse).payload
+    assert payload.track_source in ("computed", "default", "manual") and payload.track_sample_size >= 0
+    assert payload.profile_source in ("telemetry", "estimate", "manual", None)
+
+
+def test_empty_new_season_standings_fall_back_to_previous_season_with_label(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients(empty_standings=True))
+    standings = read(tmp_path, "standings.json", Standings)
+    assert standings.drivers and standings.season == 2026
+    run_pipeline(tmp_path, 2027, NOW, clients())
+    assert read(tmp_path, "standings.json", Standings).season == 2027
+
+
+def test_predictions_are_frozen_before_the_race_and_scored_after_it(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2))                 # runda 3 jeszcze przed nami
+    frozen = tmp_path / "predictions" / "2027-3.json"
+    assert frozen.exists()
+    assert len(read(tmp_path, "model.json", ModelPayload).live_evaluation) == 0
+    after = datetime(2027, 4, 11, 14, 0, tzinfo=UTC)                        # wyścig trwa/zakończony, wyniki są
+    before_text = frozen.read_text()
+    run_pipeline(tmp_path, 2027, after, clients(completed=3))
+    assert frozen.read_text() == before_text                                # po starcie nie nadpisujemy
+    assert [e.round for e in read(tmp_path, "model.json", ModelPayload).live_evaluation] == [3]

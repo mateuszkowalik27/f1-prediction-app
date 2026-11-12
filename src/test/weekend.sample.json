@@ -162,6 +162,10 @@
    "practice_pace",
    "weekend_shift"
   ],
-  "low_data": false
+  "low_data": false,
+  "lineup": "latest_race",
+  "track_source": "computed",
+  "track_sample_size": 5,
+  "profile_source": "telemetry"
  }
 }

@@ -137,6 +137,7 @@ class StandingRow(BaseModel):
 class Standings(BaseModel):
     drivers: list[StandingRow]
     constructors: list[StandingRow]
+    season: int | None = None    # sezon, którego dotyczy tabela (poza sezonem pokazujemy ostatnią zakończoną)
 
 
 class Calendar(BaseModel):
@@ -153,6 +154,7 @@ class RaceEvaluation(BaseModel):
 
 
 class WeightSnapshot(BaseModel):
+    season: int | None = None    # numer rundy powtarza się co sezon, więc sam nie wystarcza
     round: int
     weights: dict[str, float]
 
@@ -183,6 +185,18 @@ class WeekendPayload(BaseModel):
     factors_used: list[str]
     factors_skipped: list[str]
     low_data: bool
+    lineup: Literal["qualifying", "latest_race", "previous_season"] = "latest_race"   # skąd lista kierowców
+    track_source: Literal["computed", "default", "manual"] = "default"                 # skąd statystyki toru
+    track_sample_size: int = 0
+    profile_source: Literal["telemetry", "estimate", "manual"] | None = None           # skąd profil zakrętów
+
+
+class FrozenPrediction(BaseModel):
+    """predictions/<sezon>-<runda>.json: przewidywanie wyścigu zapisane tuż przed jego startem."""
+    season: int
+    round: int
+    saved_at: datetime
+    race_prediction: list[DriverProbability]
 
 
 class WeekendResponse(BaseModel):
@@ -202,6 +216,7 @@ class ModelPayload(BaseModel):
     factors_used: list[str]
     factors_skipped: list[str]
     evaluation: list[RaceEvaluation]
+    live_evaluation: list[RaceEvaluation] = []     # ocena przewidywań, które użytkownik faktycznie widział
 
 
 class Meta(BaseModel):

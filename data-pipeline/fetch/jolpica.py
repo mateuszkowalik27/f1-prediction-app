@@ -204,13 +204,28 @@ class JolpicaClient:
             raise NoResultsError(f"brak wyników: {season} runda {round}")
         return self._to_historic(races[0])
 
-    def qualifying_grid(self, season: int, round: int) -> dict[str, int] | None:
-        """driver_id -> pozycja w kwalifikacjach albo None, gdy kwalifikacje jeszcze się nie odbyły."""
+    def qualifying_result(self, season: int, round: int) -> tuple[dict[str, int], list[DriverEntry]] | None:
+        """(siatka, rzeczywista lista kierowców z zespołami) albo None, gdy kwalifikacji jeszcze nie było."""
         data = self._get(f"/{season}/{round}/qualifying.json", {"limit": PAGE_LIMIT})
         races = data["RaceTable"]["Races"]
         if not races or not races[0].get("QualifyingResults"):
             return None
-        return {r["Driver"]["driverId"]: int(r["position"]) for r in races[0]["QualifyingResults"]}
+        rows = races[0]["QualifyingResults"]
+        grid = {r["Driver"]["driverId"]: int(r["position"]) for r in rows}
+        entries = [
+            DriverEntry(
+                driver_id=r["Driver"]["driverId"],
+                code=r["Driver"].get("code") or r["Driver"]["driverId"][:3].upper(),
+                name=f'{r["Driver"]["givenName"]} {r["Driver"]["familyName"]}',
+                team_id=r["Constructor"]["constructorId"],
+            )
+            for r in rows
+        ]
+        return grid, entries
+
+    def qualifying_grid(self, season: int, round: int) -> dict[str, int] | None:
+        result = self.qualifying_result(season, round)
+        return result[0] if result else None
 
     def season_results(self, season: int, up_to_round: int) -> list[HistoricRace]:
         races = [self._to_historic(r) for r in self._all_races(f"/{season}/results.json")]

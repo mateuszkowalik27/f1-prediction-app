@@ -45,9 +45,15 @@ def test_flat_objective_keeps_base():
 
 
 def test_history_appended_each_round_without_duplicates():
-    first = append_snapshot(None, {"a": 0.3}, round=4)
+    first = append_snapshot(None, {"a": 0.3}, round=4, season=2027)
     assert [s.round for s in first.history] == [4] and first.weights == {"a": 0.3}
-    second = append_snapshot(first, {"a": 0.35}, round=5)
+    second = append_snapshot(first, {"a": 0.35}, round=5, season=2027)
     assert [s.round for s in second.history] == [4, 5]
-    again = append_snapshot(second, {"a": 0.36}, round=5)       # ta sama runda: zastępuje wpis
+    again = append_snapshot(second, {"a": 0.36}, round=5, season=2027)       # ta sama runda: zastępuje wpis
     assert [s.round for s in again.history] == [4, 5] and again.history[-1].weights == {"a": 0.36}
+
+
+def test_same_round_number_in_a_different_season_is_a_different_snapshot():
+    first = append_snapshot(None, {"a": 0.3}, round=3, season=2026)
+    second = append_snapshot(first, {"a": 0.4}, round=3, season=2027)
+    assert [(s.season, s.round) for s in second.history] == [(2026, 3), (2027, 3)]

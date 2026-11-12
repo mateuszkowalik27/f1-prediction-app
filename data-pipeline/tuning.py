@@ -45,7 +45,8 @@ def tune_weights(
     return tuned
 
 
-def append_snapshot(previous: WeightsFile | None, weights: dict[str, float], round: int) -> WeightsFile:
-    history = [s for s in (previous.history if previous else []) if s.round != round]
-    history.append(WeightSnapshot(round=round, weights=dict(weights)))
-    return WeightsFile(weights=dict(weights), history=sorted(history, key=lambda s: s.round))
+def append_snapshot(previous: WeightsFile | None, weights: dict[str, float], round: int,
+                    season: int | None = None) -> WeightsFile:
+    history = [s for s in (previous.history if previous else []) if (s.season, s.round) != (season, round)]
+    history.append(WeightSnapshot(season=season, round=round, weights=dict(weights)))
+    return WeightsFile(weights=dict(weights), history=sorted(history, key=lambda s: (s.season or 0, s.round)))

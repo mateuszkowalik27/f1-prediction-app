@@ -5,7 +5,7 @@ import { LoadError, Loading } from '../components/Status.jsx'
 import StrategyCard from '../components/StrategyCard.jsx'
 import WeatherCard from '../components/WeatherCard.jsx'
 import { useData } from '../lib/data.js'
-import { factorLabel } from '../lib/labels.js'
+import { PROFILE_SOURCE, TRACK_SOURCE, factorLabel } from '../lib/labels.js'
 
 export default function Weekend() {
   const weekend = useData('weekend.json')
@@ -28,8 +28,10 @@ export default function Weekend() {
     )
   }
 
-  const { race, weather, strategy, safety_car, qualifying, race_prediction, factors_skipped, low_data } =
-    weekend.data.payload
+  const {
+    race, weather, strategy, safety_car, qualifying, race_prediction, factors_skipped, low_data,
+    lineup, track_source, track_sample_size, profile_source,
+  } = weekend.data.payload
   const nameById = Object.fromEntries((standings.data?.drivers ?? []).map((d) => [d.id, d.name]))
   const skipped = factors_skipped.map(factorLabel).join(', ')
 
@@ -41,6 +43,12 @@ export default function Weekend() {
       </h2>
       <p className="muted small">{`Runda ${race.round} · ${race.country}`}</p>
 
+      {lineup === 'previous_season' && (
+        <p className="banner">
+          Skład kierowców pochodzi z poprzedniego sezonu i może się różnić od prawdziwego. Zaktualizuje się po
+          kwalifikacjach.
+        </p>
+      )}
       {low_data && (
         <p className="banner">
           Mało danych: część czynników jest wyłączona{skipped ? ` (${skipped})` : ''}. Prognoza jest mniej pewna.
@@ -53,6 +61,11 @@ export default function Weekend() {
       </section>
       <WeatherCard weather={weather} />
       <StrategyCard strategy={strategy} safetyCar={safety_car} />
+      <section className="card">
+        <h3>Dane o torze</h3>
+        <p>{`Trudność wyprzedzania: ${(TRACK_SOURCE[track_source] ?? TRACK_SOURCE.default)(track_sample_size ?? 0)}`}</p>
+        <p>{`Profil zakrętów: ${PROFILE_SOURCE[profile_source] ?? 'brak danych'}`}</p>
+      </section>
 
       <section className="card">
         <h3>Szanse</h3>

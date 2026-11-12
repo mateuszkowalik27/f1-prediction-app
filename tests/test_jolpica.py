@@ -239,3 +239,11 @@ def test_throttles_between_requests(tmp_path):
     client.calendar(2026)
     client.calendar(2026)
     assert any(0 < s <= 0.5 for s in sleeps)
+
+
+def test_qualifying_result_gives_real_lineup_with_teams():
+    c = make_client({"/2026/20/qualifying.json": fixture("jolpica_qualifying_2026_r20.json")})
+    grid, entries = c.qualifying_result(2026, 20)
+    assert grid["norris"] == 1
+    by_id = {e.driver_id: e for e in entries}
+    assert by_id["norris"].team_id == "mclaren" and len(entries) == len(grid)

@@ -21,12 +21,12 @@ from factors.registry import ALL_FACTORS
 from factors.reliability import dnf_rates
 from factors.track_profile import get_profile, load_estimates
 from factors.track_stats import compute_track_stats, default_track_stats
-from evaluation import RoundCase, prepare_rounds, score_rounds
+from evaluation import RoundCase, evaluate, prepare_rounds, score_rounds
 from fetch.jolpica import JolpicaClient, JolpicaError
 from fetch.openf1 import OpenF1Client
 from fetch.openmeteo import fetch_forecast, wet_races
 from schemas import (
-    Calendar, DriverEntry, DriverProbability, HistoricRace, Meta, ModelPayload, ProfileCache, Race,
+    Calendar, DriverEntry, DriverProbability, FrozenPrediction, HistoricRace, Meta, ModelPayload, ProfileCache, Race,
     SafetyCarOdds, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse, WetCache,
     WeightsFile,
 )
@@ -38,6 +38,7 @@ from tuning import MIN_ROUNDS, append_snapshot, tune_weights
 
 RACE_DURATION = timedelta(hours=3)
 QUALIFYING_DURATION = timedelta(hours=2)
+SEASON_GRACE = timedelta(days=7)    # tyle czekamy po ostatnim wyścigu, zanim uznamy sezon za zamknięty (wyniki mogą się jeszcze zmienić)
 HISTORY_SEASONS = 8                 # ile sezonów wstecz sięgamy po historię toru
 MAX_PROFILE_FETCHES_PER_RUN = 3     # telemetria jest wolna: profile torów uzupełniamy stopniowo
 EXTRA_WEIGHT_KEYS = ("grid_base_weight", "race_noise_base")
@@ -78,23 +79,33 @@ def select_next_race(races: list[Race], now_utc: datetime) -> Race | None:
 
 
 def resolve_season(now_utc: datetime, jolpica) -> int:
-    """Bieżący sezon: rok kalendarzowy, dopóki ma nadchodzące rundy; potem następny, jeśli jego kalendarz jest już znany."""
+    """Bieżący sezon: rok kalendarzowy, dopóki trwa (plus tydzień po ostatnim wyścigu, żeby wyniki były ostateczne
+    zanim trafią do niezmiennego cache'u); potem następny, jeśli jego kalendarz jest już znany."""
     year = now_utc.year
-    if select_next_race(jolpica.calendar(year), now_utc) is not None:
+    races = jolpica.calendar(year)
+    if any((_race_start(r) is None) or _race_start(r) + SEASON_GRACE > now_utc for r in races):
         return year
     return year + 1 if jolpica.calendar(year + 1) else year
 
 
-def resolve_grid(race: Race, now_utc: datetime, jolpica, predicted: dict[str, int]) -> tuple[dict[str, int], str]:
+def actual_qualifying(race: Race, now_utc: datetime, jolpica) -> tuple[dict[str, int], list[DriverEntry]] | None:
+    """Rzeczywista siatka i lista kierowców po kwalifikacjach (obejmuje zastępstwa), a wcześniej None."""
     quali = next((s.start_utc for s in race.sessions if s.name == "Qualifying"), None)
-    if quali and quali + QUALIFYING_DURATION <= now_utc:
-        try:
-            actual = jolpica.qualifying_grid(race.season, race.round)
-        except JolpicaError:
-            actual = None
-        if actual:
-            return actual, "actual"
-    return predicted, "predicted"
+    if not quali or quali + QUALIFYING_DURATION > now_utc:
+        return None
+    try:
+        return jolpica.qualifying_result(race.season, race.round)
+    except JolpicaError:
+        return None
+
+
+def _optional(label: str, fn, *args):
+    """Opcjonalne źródło (pogoda, OpenF1): każdy błąd tylko je wyłącza, nie przerywa aktualizacji. -> (wynik, błąd?)"""
+    try:
+        return fn(*args), False
+    except Exception as exc:  # noqa: BLE001 — świadomie szeroko: zepsuta odpowiedź obcego API nie może zabić przebiegu
+        print(f"UWAGA: {label} nie zadziałało ({type(exc).__name__}: {exc}); pomijam to źródło.", file=sys.stderr)
+        return None, True
 
 
 def _actual_quali_rows(grid: dict[str, int], drivers: list[str]) -> list[DriverProbability]:
@@ -125,7 +136,7 @@ def _collect_profiles(openf1, needed: dict[str, Race], cache: dict[str, TrackPro
         trace = None
         if fetches < MAX_PROFILE_FETCHES_PER_RUN:
             fetches += 1
-            trace = openf1.speed_trace(needed[cid])
+            trace, _ = _optional("telemetria toru", openf1.speed_trace, needed[cid])
         profile = get_profile(cid, trace, estimates, None)
         if profile is not None:
             profiles[cid] = profile
@@ -159,7 +170,10 @@ def _load_weights(out_dir: Path) -> WeightsFile:
 def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Clients, weights: dict[str, float],
                      profile_cache: dict[str, TrackProfile]):
     j, f1 = clients.jolpica, clients.openf1
-    entries: list[DriverEntry] = j.entries(season) or j.entries(season - 1)
+    entries: list[DriverEntry] = j.entries(season)
+    lineup = "latest_race"
+    if not entries:  # początek sezonu: klasyfikacja jeszcze pusta, składu nie znamy
+        entries, lineup = j.entries(season - 1), "previous_season"
     if not entries:
         raise JolpicaError("brak listy kierowców")
     history = [h for h in j.season_results(season - 1, 99) + (j.season_results(season, race.round - 1)
@@ -170,13 +184,20 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     if latest:  # klasyfikacja zawiera też kierowców, którzy już nie jadą (zastępstwa): bierzemy ostatnią stawkę
         active = {r.driver_id for r in latest.results}
         entries = [e for e in entries if e.driver_id in active] or entries
+    actual = actual_qualifying(race, now_utc, j)
+    if actual:  # po kwalifikacjach znamy prawdziwy skład (także zastępstwa) i siatkę
+        actual_grid, entries = actual
+        lineup = "qualifying"
+    else:
+        actual_grid = None
 
     wet = clients.wet(history + circuit_history)
     start = _race_start(race)
-    weather = clients.forecast(race.lat, race.lon, start.date()) if start else None
-    practice = f1.practice_pace(race, entries)
-    safety = f1.safety_events(race.circuit_id, circuit_history)
-    tyre = f1.tyre_history(race.circuit_id, circuit_history)
+    weather, weather_failed = (_optional("prognoza pogody", clients.forecast, race.lat, race.lon, start.date())
+                               if start else (None, False))
+    practice, f1a = _optional("treningi OpenF1", f1.practice_pace, race, entries)
+    safety, f1b = _optional("safety car OpenF1", f1.safety_events, race.circuit_id, circuit_history)
+    tyre, f1c = _optional("opony OpenF1", f1.tyre_history, race.circuit_id, circuit_history)
 
     track = compute_track_stats(race.circuit_id, circuit_history, safety, season,
                                 config.TRACK_OVERRIDES.get(race.circuit_id),
@@ -193,42 +214,48 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     drivers = [e.driver_id for e in entries]
 
     quali = predict_qualifying(combined.strength)
-    grid, grid_source = resolve_grid(race, now_utc, j, quali.predicted_grid)
-    quali_rows = _actual_quali_rows(grid, drivers) if grid_source == "actual" else quali.probabilities
-
-    dnf, sim_track = apply_early_season(dnf_rates(replace(ctx, grid=grid)), track, race.round)
+    quali_rows = _actual_quali_rows(actual_grid, drivers) if actual_grid else quali.probabilities
+    dnf, sim_track = apply_early_season(dnf_rates(ctx), track, race.round)
     strategy = predict_strategy(track, weather, tyre)
-    race_rows = simulate_race(
-        combined.strength, grid if grid_source == "actual" else None, sim_track, dnf, strategy.primary.stops,
+    race_rows = simulate_race(   # bez siatki (przed kwalifikacjami) losujemy ją w każdej symulacji
+        combined.strength, actual_grid, sim_track, dnf, strategy.primary.stops,
         grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),
         noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
     )
+    sources = {
+        "open_meteo": "failed" if weather_failed else ("ok" if weather else "missing"),
+        "openf1": "failed" if (f1a or f1b or f1c) else ("ok" if (practice or safety or tyre) else "missing"),
+    }
+    profile = profiles.get(race.circuit_id)
     payload = WeekendPayload(
         race=race, weather=weather, strategy=strategy,
         safety_car=SafetyCarOdds(sc=track.sc_probability, vsc=track.vsc_probability),
         qualifying=quali_rows, race_prediction=race_rows,
-        factors_used=combined.used, factors_skipped=combined.skipped, low_data=combined.low_data,
+        factors_used=combined.used, factors_skipped=combined.skipped,
+        low_data=combined.low_data or sources["openf1"] != "ok",   # brak OpenF1 = mało danych (spec §3)
+        lineup=lineup, track_source=track.source, track_sample_size=track.sample_size,
+        profile_source=profile.source if profile else None,
     )
-    sources = {"open_meteo": "ok" if weather else "missing",
-               "openf1": "ok" if (practice or safety or tyre) else "missing"}
     return payload, sources, new_cache
 
 
-def _prepare_cases(season: int, clients: Clients, calendar: list[Race]) -> list[RoundCase]:
-    """Zakończone rundy do oceny i strojenia; awaria źródła nie może zablokować reszty pipeline'u."""
-    try:
-        return prepare_rounds(season, clients, calendar)
-    except (JolpicaError, LookupError):
-        return []
+def _live_evaluation(out_dir: Path, season: int, cases: list[RoundCase]):
+    """Ocena przewidywań zapisanych tuż przed startem wyścigu (tych, które użytkownik faktycznie widział)."""
+    result = []
+    for case in cases:
+        frozen = _load_model(out_dir / "predictions" / f"{season}-{case.round}.json", FrozenPrediction)
+        if frozen:
+            result.append(evaluate(case.round, frozen.race_prediction, case.actual_finish))
+    return result
 
 
-def _tuned_weights(out_dir: Path, cases: list[RoundCase]) -> WeightsFile:
+def _tuned_weights(out_dir: Path, cases: list[RoundCase], season: int) -> WeightsFile:
     """Wagi z weights.json; po każdej nowej rundzie (od MIN_ROUNDS) dostrajane od nowa z wartości z configu."""
     stored = _load_weights(out_dir)
     if len(cases) < MIN_ROUNDS:
         return stored
     last_round = cases[-1].round
-    if stored.history and stored.history[-1].round == last_round:
+    if stored.history and (stored.history[-1].season, stored.history[-1].round) == (season, last_round):
         return stored
     # czynnik bez żadnych danych w teście wstecznym (pogoda, treningi) nie ma na co wpływać: nie stroimy go
     untestable = {name for name in config.FACTOR_WEIGHTS if all(c.factor_scores.get(name) is None for c in cases)}
@@ -236,7 +263,7 @@ def _tuned_weights(out_dir: Path, cases: list[RoundCase]) -> WeightsFile:
         config.default_weights(), config.WEIGHT_BOUNDS, set(config.LOCKED_WEIGHTS) | untestable, len(cases),
         lambda w: mean(e.brier_win for e in score_rounds(cases, w, config.N_SIMULATIONS_TUNING)),
     )
-    return append_snapshot(stored, tuned, last_round)
+    return append_snapshot(stored, tuned, last_round, season)
 
 
 def _cached_wet(wet_fn, flags: dict[str, bool]):
@@ -257,13 +284,19 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
     clients = replace(clients, wet=_cached_wet(clients.wet, wet_flags))
     calendar = clients.jolpica.calendar(season)       # awaria Jolpica kończy się tu, zanim cokolwiek zapiszemy
     standings = clients.jolpica.standings(season)
-    cases = _prepare_cases(season, clients, calendar)
-    weights_file = _tuned_weights(out_dir, cases)
+    if standings.drivers:
+        standings = standings.model_copy(update={"season": season})
+    else:  # nowy sezon bez wyników: pokazujemy ostatnią zakończoną tabelę z oznaczeniem sezonu
+        previous = clients.jolpica.standings(season - 1)
+        standings = previous.model_copy(update={"season": season - 1}) if previous.drivers else standings
+    cases = prepare_rounds(season, clients, calendar)   # awaria Jolpica przerywa przebieg: pliki zostają nietknięte
+    weights_file = _tuned_weights(out_dir, cases, season)
     cache = _load_model(out_dir / "track_profiles.json", ProfileCache)
     profile_cache = cache.profiles if cache else {}
 
     sources = {"jolpica": "ok", "open_meteo": "missing", "openf1": "missing"}
     race = select_next_race(calendar, now_utc)
+    frozen = None
     if race is None:
         weekend = WeekendResponse(status="no_upcoming_race", payload=None)
         used, skipped, new_cache = [], [], profile_cache
@@ -272,17 +305,25 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
         weekend = WeekendResponse(status="ok", payload=payload)
         sources.update(extra)
         used, skipped = payload.factors_used, payload.factors_skipped
+        start = _race_start(race)
+        if start is None or now_utc < start:   # po starcie wyścigu przewidywania już nie nadpisujemy
+            frozen = FrozenPrediction(season=season, round=race.round, saved_at=now_utc,
+                                      race_prediction=payload.race_prediction)
 
     meta = Meta(generated_at=now_utc, season=season, data_sources=sources)
     evaluation = score_rounds(cases, weights_file.weights, config.N_SIMULATIONS_TUNING) if cases else []
     model = ModelPayload(weights=weights_file.weights, weight_history=weights_file.history,
-                         factors_used=used, factors_skipped=skipped, evaluation=evaluation)
+                         factors_used=used, factors_skipped=skipped, evaluation=evaluation,
+                         live_evaluation=_live_evaluation(out_dir, season, cases))
 
     out_dir.mkdir(parents=True, exist_ok=True)         # wszystko policzone i zwalidowane: zapisujemy
     _write(out_dir / "calendar.json", Calendar(season=season, races=calendar))
     _write(out_dir / "standings.json", standings)
     _write(out_dir / "weekend.json", weekend)
     _write(out_dir / "model.json", model)
+    if frozen:
+        (out_dir / "predictions").mkdir(exist_ok=True)
+        _write(out_dir / "predictions" / f"{season}-{frozen.round}.json", frozen)
     if new_cache != profile_cache:
         _write(out_dir / "track_profiles.json", ProfileCache(profiles=new_cache))
     if weights_file != _load_model(out_dir / "weights.json", WeightsFile) and weights_file.history:

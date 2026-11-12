@@ -5,6 +5,31 @@ import { factorLabel, num, pct, weightChanges } from '../lib/labels.js'
 const FACTORS = ['car_pace', 'driver_form', 'track_history', 'practice_pace', 'weekend_shift', 'car_track_fit', 'wet_skill', 'reliability']
 const mean = (values) => values.reduce((sum, v) => sum + v, 0) / values.length
 
+function EvaluationTable({ rows }) {
+  return (
+      <table>
+                <thead>
+                  <tr>
+                    <th>Runda</th>
+                    <th className="num">Szansa zwycięzcy</th>
+                    <th className="num">Top 3</th>
+                    <th className="num">Błąd pozycji</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((e) => (
+                    <tr key={e.round}>
+                      <td>{e.round}</td>
+                      <td className="num">{pct(e.winner_prob)}</td>
+                      <td className="num">{e.winner_in_top3 ? 'tak' : 'nie'}</td>
+                      <td className="num">{num(e.mean_abs_position_error, 1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+  )
+}
+
 export default function ModelInfo() {
   const { data, error, loading } = useData('model.json')
 
@@ -14,6 +39,7 @@ export default function ModelInfo() {
   const { weights, factors_used: used = [], factors_skipped: skipped = [], evaluation, weight_history: history } = data
   const maxWeight = Math.max(...FACTORS.map((key) => weights[key] ?? 0), 0.0001)
   const changes = weightChanges(history)
+  const live = data.live_evaluation ?? []
   const top3 = evaluation.filter((e) => e.winner_in_top3).length
 
   return (
@@ -59,26 +85,7 @@ export default function ModelInfo() {
           <p className="muted">Ocena pojawi się po pierwszych rozegranych wyścigach sezonu.</p>
         ) : (
           <>
-            <table>
-              <thead>
-                <tr>
-                  <th>Runda</th>
-                  <th className="num">Szansa zwycięzcy</th>
-                  <th className="num">Top 3</th>
-                  <th className="num">Błąd pozycji</th>
-                </tr>
-              </thead>
-              <tbody>
-                {evaluation.map((e) => (
-                  <tr key={e.round}>
-                    <td>{e.round}</td>
-                    <td className="num">{pct(e.winner_prob)}</td>
-                    <td className="num">{e.winner_in_top3 ? 'tak' : 'nie'}</td>
-                    <td className="num">{num(e.mean_abs_position_error, 1)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <EvaluationTable rows={evaluation} />
             <p>
               {`Średnia szansa przypisana zwycięzcy: ${pct(mean(evaluation.map((e) => e.winner_prob)))}; w trójce faworytów: ${top3} z ${evaluation.length}.`}
             </p>
@@ -89,6 +96,16 @@ export default function ModelInfo() {
           </>
         )}
       </section>
+
+      {live.length > 0 && (
+        <section className="card">
+          <h3>Przewidywania, które faktycznie widziałeś</h3>
+          <p className="muted small">
+            Prognoza zapisana tuż przed startem wyścigu i porównana z jego wynikiem. To uczciwsza miara niż powyższa.
+          </p>
+          <EvaluationTable rows={live} />
+        </section>
+      )}
     </>
   )
 }

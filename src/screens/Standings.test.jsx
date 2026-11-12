@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mockData } from '../test/mockData.js'
+import { mockData, sampleStandings } from '../test/mockData.js'
 import Standings from './Standings.jsx'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -21,6 +21,12 @@ describe('Standings screen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zespoły' }))
     expect(screen.getByText('Mercedes')).toBeInTheDocument()
     expect(screen.queryByText('Andrea Kimi Antonelli')).not.toBeInTheDocument()
+  })
+
+  it('names the season when the table is not from the current one', async () => {
+    mockData({ 'standings.json': { ...sampleStandings(), season: 2026 } })
+    render(<Standings />)
+    expect(await screen.findByRole('heading', { name: 'Klasyfikacje 2026' })).toBeInTheDocument()
   })
 
   it('explains an empty table at the start of the season', async () => {

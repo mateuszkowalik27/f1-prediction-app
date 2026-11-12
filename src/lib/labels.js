@@ -56,7 +56,20 @@ export function weightChanges(history) {
   if (!Array.isArray(history) || history.length < 2) return []
   const previous = history[history.length - 2]
   const last = history[history.length - 1]
+  if (previous.season !== last.season) return [] // numery rund powtarzają się co sezon: nie porównujemy sezonów
   return Object.keys(last.weights)
     .filter((key) => key in previous.weights && num(previous.weights[key]) !== num(last.weights[key]))
     .map((key) => `${factorLabel(key)}: ${num(previous.weights[key])} → ${num(last.weights[key])} po rundzie ${last.round}`)
+}
+
+export const TRACK_SOURCE = {
+  computed: (n) => `wyliczona z historii (${n === 1 ? '1 wyścig' : n >= 2 && n <= 4 ? `${n} wyścigi` : `${n} wyścigów`})`,
+  default: () => 'wartości domyślne (brak historii toru)',
+  manual: () => 'ustawiona ręcznie',
+}
+
+export const PROFILE_SOURCE = {
+  telemetry: 'z telemetrii',
+  estimate: 'szacunek (nie dane oficjalne)',
+  manual: 'ustawiony ręcznie',
 }

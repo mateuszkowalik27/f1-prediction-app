@@ -34,6 +34,34 @@ describe('Model screen', () => {
     expect(screen.queryByText(/po rundzie/)).not.toBeInTheDocument()
   })
 
+  it('does not compare weights across different seasons', async () => {
+    const model = sampleModel()
+    model.weight_history = [
+      { ...model.weight_history[0], season: 2026, round: 24 },
+      { ...model.weight_history[1], season: 2027, round: 3 },
+    ]
+    mockData({ 'model.json': model })
+    render(<ModelInfo />)
+    await screen.findByText('siła bolidu')
+    expect(screen.queryByText(/po rundzie/)).not.toBeInTheDocument()
+  })
+
+  it('shows the predictions the user actually saw, scored after the race', async () => {
+    const model = sampleModel()
+    model.live_evaluation = [{ round: 15, winner_prob: 0.21, winner_in_top3: true, mean_abs_position_error: 3.4, brier_win: 0.04 }]
+    mockData({ 'model.json': model })
+    render(<ModelInfo />)
+    expect(await screen.findByText('Przewidywania, które faktycznie widziałeś')).toBeInTheDocument()
+    expect(screen.getByText('21%')).toBeInTheDocument()
+  })
+
+  it('hides the "seen predictions" section until there are any', async () => {
+    mockData()
+    render(<ModelInfo />)
+    await screen.findByText('siła bolidu')
+    expect(screen.queryByText('Przewidywania, które faktycznie widziałeś')).not.toBeInTheDocument()
+  })
+
   it('shows evaluation rows and an average', async () => {
     mockData()
     render(<ModelInfo />)

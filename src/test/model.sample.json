@@ -75,5 +75,6 @@
    "mean_abs_position_error": 2.1,
    "brier_win": 0.012
   }
- ]
+ ],
+ "live_evaluation": []
 }

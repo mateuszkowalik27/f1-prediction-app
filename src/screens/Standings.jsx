@@ -18,7 +18,7 @@ export default function Standings() {
 
   return (
     <>
-      <h2>Klasyfikacje</h2>
+      <h2>{data.season ? `Klasyfikacje ${data.season}` : 'Klasyfikacje'}</h2>
       <div className="segmented">
         {VIEWS.map((v) => (
           <button key={v.id} aria-pressed={view === v.id} onClick={() => setView(v.id)}>

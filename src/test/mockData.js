@@ -15,5 +15,6 @@ export function mockData(overrides = {}) {
   }))
 }
 
+export const sampleStandings = () => structuredClone(standings)
 export const sampleModel = () => structuredClone(model)
 export const sampleWeekend = () => structuredClone(weekend)

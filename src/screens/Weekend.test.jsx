@@ -97,6 +97,33 @@ describe('Weekend screen', () => {
     expect(screen.getByRole('columnheader', { name: 'Pole position' })).toBeInTheDocument()
   })
 
+  it('warns when the lineup comes from the previous season', async () => {
+    mockData(withPayload((p) => { p.lineup = 'previous_season' }))
+    render(<Weekend />)
+    expect(await screen.findByText(/Skład kierowców pochodzi z poprzedniego sezonu/)).toBeInTheDocument()
+  })
+
+  it('does not warn about the lineup when it is current', async () => {
+    mockData()
+    render(<Weekend />)
+    await screen.findByText('Trening 1')
+    expect(screen.queryByText(/Skład kierowców pochodzi/)).not.toBeInTheDocument()
+  })
+
+  it('says where the track data comes from (measured)', async () => {
+    mockData()
+    render(<Weekend />)
+    expect(await screen.findByText(/wyliczona z historii \(5 wyścigów\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Profil zakrętów: z telemetrii/)).toBeInTheDocument()
+  })
+
+  it('labels defaults and estimates as such', async () => {
+    mockData(withPayload((p) => { p.track_source = 'default'; p.track_sample_size = 0; p.profile_source = 'estimate' }))
+    render(<Weekend />)
+    expect(await screen.findByText(/wartości domyślne/)).toBeInTheDocument()
+    expect(screen.getByText(/szacunek/)).toBeInTheDocument()
+  })
+
   it('shows the strategy and safety car odds', async () => {
     mockData()
     render(<Weekend />)

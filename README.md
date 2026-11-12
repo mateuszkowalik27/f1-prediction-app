@@ -94,8 +94,12 @@ npm run build       # wersja produkcyjna do katalogu dist
   To szacunki autora aplikacji, a nie dane oficjalne.
 - **Szanse na żywo w trakcie wyścigu nie są liczone.** Aplikacja aktualizuje się po sesjach.
 - **Predykcje to prawdopodobieństwa.** Faworyt z 40% szans przegrywa w 60% wyścigów.
-- Kierowca debiutujący w następnym wyścigu pojawia się w predykcjach dopiero po jego odbyciu (lista kierowców
-  pochodzi z ostatniej stawki).
+- **Skład kierowców.** Przed pierwszym wyścigiem sezonu pochodzi z poprzedniego roku (aplikacja o tym ostrzega).
+  Po kwalifikacjach bierze prawdziwy skład z ich wyników, razem z zastępstwami i zmianami zespołów.
+- **Ocena trafności jest optymistyczna.** Zakładka Model pokazuje test wsteczny, w którym wagi są dostrajane na tych
+  samych wyścigach, na których model oceniamy. Uczciwsza jest sekcja „Przewidywania, które faktycznie widziałeś":
+  prognoza zapisana tuż przed startem i porównana z wynikiem. Pojawi się po pierwszych wyścigach z robotem.
+- **Poza sezonem** (grudzień-marzec) klasyfikacja pokazuje ostatnią zakończoną tabelę z oznaczeniem sezonu.
 - Jolpica ma limit ok. 200 zapytań na godzinę. Robot zapamiętuje dane zakończonych sezonów w cache GitHub Actions,
   żeby się w nim mieścić.
 

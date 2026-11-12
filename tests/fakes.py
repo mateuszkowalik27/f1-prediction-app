@@ -26,10 +26,12 @@ CALENDAR = [mk_race(1, 3, 14), mk_race(2, 3, 28), mk_race(3, 4, 11)]
 
 class FakeJolpica:
     def __init__(self, fail=False, grid=None, with_history=True, empty_round=None, extra_entry=False,
-                 completed=2):
+                 completed=2, entries_current=True, empty_standings=False, fail_results=False, quali_entries=None):
         self.fail, self.grid, self.with_history, self.empty_round = fail, grid, with_history, empty_round
         self.extra_entry = extra_entry
         self.completed = completed
+        self.entries_current, self.empty_standings = entries_current, empty_standings
+        self.fail_results, self.quali_entries = fail_results, quali_entries
 
     def calendar(self, season):
         if self.fail:
@@ -37,15 +39,21 @@ class FakeJolpica:
         return CALENDAR
 
     def standings(self, season):
+        if self.empty_standings and season == 2027:
+            return Standings(drivers=[], constructors=[])
         row = StandingRow(id="d1", name="D1", points=43, wins=1, position=1)
         return Standings(drivers=[row], constructors=[row.model_copy(update={"id": "t1"})])
 
     def entries(self, season):
-        if season != 2027:
+        if season == 2026 and not self.entries_current:
+            return ENTRIES                      # początek sezonu: klasyfikacja nowego roku jeszcze pusta
+        if season != 2027 or not self.entries_current:
             return []
         return ENTRIES + make_entries(("gone", "t9")) if self.extra_entry else ENTRIES
 
     def season_results(self, season, up_to_round):
+        if self.fail_results and up_to_round == 9999:        # tylko przygotowanie testu wstecznego
+            raise JolpicaError("awaria przy ocenie")
         if not self.with_history:
             return []
         if season == 2026:
@@ -65,13 +73,22 @@ class FakeJolpica:
     def qualifying_grid(self, season, round):
         return self.grid
 
+    def qualifying_result(self, season, round):
+        if not self.grid:
+            return None
+        entries = self.quali_entries or [e for e in ENTRIES if e.driver_id in self.grid]
+        return self.grid, entries
+
 
 class FakeOpenF1:
-    def __init__(self, practice=None):
+    def __init__(self, practice=None, broken=False):
         self.practice = practice
+        self.broken = broken
         self.trace_requests = []
 
     def practice_pace(self, race, entries):
+        if self.broken:
+            raise KeyError("stint_number")     # zepsuta odpowiedź OpenF1
         return self.practice
 
     def safety_events(self, circuit_id, races):
