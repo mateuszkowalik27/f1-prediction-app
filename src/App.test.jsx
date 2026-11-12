@@ -1,13 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.jsx'
+import { mockData } from './test/mockData.js'
 
-beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async () => ({
-    ok: true,
-    json: async () => ({ generated_at: '2027-04-01T12:00:00Z', season: 2027, data_sources: {} }),
-  })))
-})
+beforeEach(() => mockData())
 afterEach(() => vi.unstubAllGlobals())
 
 describe('App', () => {

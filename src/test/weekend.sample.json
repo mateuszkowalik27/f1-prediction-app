@@ -1,0 +1,167 @@
+{
+ "status": "ok",
+ "payload": {
+  "race": {
+   "season": 2026,
+   "round": 21,
+   "name": "Las Vegas Grand Prix",
+   "circuit_id": "vegas",
+   "country": "USA",
+   "lat": 36.1,
+   "lon": -115.2,
+   "is_sprint": false,
+   "sessions": [
+    {
+     "name": "FP1",
+     "start_utc": "2026-11-20T00:30:00Z"
+    },
+    {
+     "name": "FP2",
+     "start_utc": "2026-11-20T04:00:00Z"
+    },
+    {
+     "name": "FP3",
+     "start_utc": "2026-11-21T00:30:00Z"
+    },
+    {
+     "name": "Qualifying",
+     "start_utc": "2026-11-21T04:00:00Z"
+    },
+    {
+     "name": "Race",
+     "start_utc": "2026-11-22T04:00:00Z"
+    }
+   ]
+  },
+  "weather": {
+   "rain_probability": 0.08,
+   "temperature_c": 14.6,
+   "fetched_at": "2026-11-12T07:59:53Z"
+  },
+  "strategy": {
+   "primary": {
+    "stops": 1,
+    "compounds": [
+     "HARD",
+     "MEDIUM"
+    ]
+   },
+   "alternative": {
+    "stops": 2,
+    "compounds": [
+     "MEDIUM",
+     "HARD",
+     "MEDIUM"
+    ]
+   },
+   "rain_risk": 0.08,
+   "confidence": "high"
+  },
+  "safety_car": {
+   "sc": 0.49,
+   "vsc": 0.54
+  },
+  "qualifying": [
+   {
+    "driver_id": "norris",
+    "win": 0.4,
+    "podium": 0.9,
+    "points": 0,
+    "expected_points": 0,
+    "position_distribution": [
+     0.4,
+     0.6
+    ]
+   },
+   {
+    "driver_id": "antonelli",
+    "win": 0.35,
+    "podium": 0.85,
+    "points": 0,
+    "expected_points": 0,
+    "position_distribution": [
+     0.35,
+     0.65
+    ]
+   },
+   {
+    "driver_id": "russell",
+    "win": 0.2,
+    "podium": 0.6,
+    "points": 0,
+    "expected_points": 0,
+    "position_distribution": [
+     0.2,
+     0.8
+    ]
+   },
+   {
+    "driver_id": "leclerc",
+    "win": 0.05,
+    "podium": 0.3,
+    "points": 0,
+    "expected_points": 0,
+    "position_distribution": [
+     0.05,
+     0.95
+    ]
+   }
+  ],
+  "race_prediction": [
+   {
+    "driver_id": "russell",
+    "win": 0.2,
+    "podium": 0.55,
+    "points": 0.95,
+    "expected_points": 11.2,
+    "position_distribution": [
+     0.2,
+     0.8
+    ]
+   },
+   {
+    "driver_id": "antonelli",
+    "win": 0.28,
+    "podium": 0.6,
+    "points": 0.97,
+    "expected_points": 14.2,
+    "position_distribution": [
+     0.28,
+     0.72
+    ]
+   },
+   {
+    "driver_id": "norris",
+    "win": 0.004,
+    "podium": 0.2,
+    "points": 0.9,
+    "expected_points": 8.0,
+    "position_distribution": [
+     0.004,
+     0.996
+    ]
+   },
+   {
+    "driver_id": "leclerc",
+    "win": 0.5,
+    "podium": 0.8,
+    "points": 0.99,
+    "expected_points": 16.0,
+    "position_distribution": [
+     0.5,
+     0.5
+    ]
+   }
+  ],
+  "factors_used": [
+   "car_pace",
+   "driver_form",
+   "reliability"
+  ],
+  "factors_skipped": [
+   "practice_pace",
+   "weekend_shift"
+  ],
+  "low_data": false
+ }
+}
