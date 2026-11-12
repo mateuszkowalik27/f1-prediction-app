@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatLap, formatRaceResult } from './format.js'
+import { formatGap, formatLap, formatRaceResult } from './format.js'
 
 describe('formatLap', () => {
   it('formats minutes with a decimal comma', () => {
@@ -26,5 +26,17 @@ describe('formatRaceResult', () => {
     expect(formatRaceResult({ time: null, status: 'Engine' })).toEqual({ text: 'DNF', reason: 'Engine' })
     expect(formatRaceResult({ time: null, status: 'Disqualified' }).text).toBe('DSQ')
     expect(formatRaceResult({ time: null, status: 'Did not start' }).text).toBe('DNS')
+  })
+})
+
+describe('formatGap', () => {
+  it('shows the gap to the leader with a decimal comma', () => {
+    expect(formatGap(79.623, 79.5)).toBe('+0,123')
+    expect(formatGap(80.5, 79.5)).toBe('+1,000')
+  })
+  it('shows nothing for the leader or a missing time', () => {
+    expect(formatGap(79.5, 79.5)).toBeNull()
+    expect(formatGap(null, 79.5)).toBeNull()
+    expect(formatGap(79.5, Infinity)).toBeNull()
   })
 })

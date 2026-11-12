@@ -18,3 +18,9 @@ export function formatRaceResult(row) {
   if (status === 'Finished') return { text: '–', reason: null }
   return { text: 'DNF', reason: status || null }
 }
+
+// Strata do lidera: 0.123 -> "+0,123"; lider (0) i brak czasu -> null.
+export function formatGap(seconds, best) {
+  if (seconds == null || best == null || seconds <= best) return null
+  return `+${(seconds - best).toFixed(3).replace('.', ',')}`
+}

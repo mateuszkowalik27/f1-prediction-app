@@ -94,6 +94,7 @@ describe('Calendar screen', () => {
       expect(within(li).getByText('Q3')).toBeInTheDocument()
       expect(within(li).getByText('1:18,900')).toBeInTheDocument()
       expect(within(li).getAllByText('–')).toHaveLength(2)
+      expect(within(li).getByText('+0,800')).toBeInTheDocument()   // Russell w Q1: 80,9 - 80,1 (strata do lidera części)
     })
 
     it('shows race times, gaps and the reason for retiring', async () => {

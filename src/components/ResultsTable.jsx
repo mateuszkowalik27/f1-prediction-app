@@ -1,4 +1,4 @@
-import { formatLap, formatRaceResult } from '../lib/format.js'
+import { formatGap, formatLap, formatRaceResult } from '../lib/format.js'
 import { prettifyId } from '../lib/labels.js'
 
 const Name = ({ id, nameById, numberById }) => (
@@ -11,6 +11,8 @@ const Name = ({ id, nameById, numberById }) => (
 // Tabela wyników jednej sesji. `table.kind`: practice | qualifying | race.
 export default function ResultsTable({ table, nameById = {}, numberById = {} }) {
   const { kind, rows } = table
+  // najlepszy czas w każdej części kwalifikacji: do niego liczymy stratę
+  const best = ['q1', 'q2', 'q3'].map((q) => Math.min(...rows.map((r) => r[q]).filter((t) => t != null)))
   return (
     <table className="results">
       <thead>
@@ -30,7 +32,12 @@ export default function ResultsTable({ table, nameById = {}, numberById = {} }) 
               <td className="num">{row.position ?? i + 1}</td>
               <td><Name id={row.driver_id} nameById={nameById} numberById={numberById} /></td>
               {kind === 'practice' && <td className="num">{formatLap(row.best_s)}</td>}
-              {kind === 'qualifying' && [row.q1, row.q2, row.q3].map((t, n) => <td className="num" key={n}>{formatLap(t)}</td>)}
+              {kind === 'qualifying' && [row.q1, row.q2, row.q3].map((t, n) => (
+                <td className="num" key={n}>
+                  {formatLap(t)}
+                  {formatGap(t, best[n]) && <span className="muted small block">{formatGap(t, best[n])}</span>}
+                </td>
+              ))}
               {kind === 'race' && (
                 <td className="num">
                   {result.text}
