@@ -36,11 +36,25 @@ describe('Weekend screen', () => {
     expect(await screen.findByText(/Brak prognozy/)).toBeInTheDocument()
   })
 
-  it('shows rain chance and temperature when there is a forecast', async () => {
+  it('shows rain chance and, without an hourly forecast, says the temperature is the day maximum', async () => {
     mockData()
     render(<Weekend />)
     expect(await screen.findByText(/8%/, { selector: '.weather *' })).toBeInTheDocument()
-    expect(screen.getByText(/15 °C/)).toBeInTheDocument()
+    expect(screen.getByText(/maks\. w dniu wyścigu\): 15 °C/)).toBeInTheDocument()
+  })
+
+  it('shows the temperature at the race start in local time', async () => {
+    mockData(withPayload((p) => { p.weather.start_temperature_c = 9.0; p.weather.start_local_time = '20:00' }))
+    render(<Weekend />)
+    const card = (await screen.findByText('Pogoda')).closest('section')
+    expect(card).toHaveTextContent('Temperatura na starcie wyścigu (o 20:00 czasu lokalnego): 9 °C')
+    expect(card).not.toHaveTextContent('15 °C')                     // nie maksimum dnia
+  })
+
+  it('still labels the start temperature when the local time is unknown (older data file)', async () => {
+    mockData(withPayload((p) => { p.weather.start_temperature_c = 9.0 }))
+    render(<Weekend />)
+    expect(await screen.findByText(/o godzinie startu/)).toBeInTheDocument()
   })
 
   it('shows a low-data banner', async () => {

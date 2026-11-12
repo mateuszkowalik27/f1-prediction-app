@@ -17,14 +17,19 @@ def _client(http: httpx.Client | None) -> httpx.Client:
     return http or httpx.Client(timeout=30)
 
 
-def _start_temperature(data: dict, start_utc: datetime | None) -> float | None:
-    """Temperatura powietrza z prognozy godzinowej dla godziny startu (UTC); brak sekcji lub godziny -> None."""
-    if start_utc is None:
+def _local_start(data: dict, start_utc: datetime) -> datetime:
+    """Godzina startu w czasie lokalnym toru (odpowiedź z timezone=auto podaje przesunięcie względem UTC)."""
+    offset = int(data.get("utc_offset_seconds") or 0)
+    return start_utc.astimezone(timezone.utc).replace(tzinfo=None) + timedelta(seconds=offset)
+
+
+def _start_temperature(data: dict, local_start: datetime | None) -> float | None:
+    """Temperatura powietrza z prognozy godzinowej dla pełnej godziny startu (czas lokalny); brak sekcji lub godziny -> None."""
+    if local_start is None:
         return None
     try:
         hourly = data["hourly"]
-        key = start_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:00")
-        value = hourly["temperature_2m"][hourly["time"].index(key)]
+        value = hourly["temperature_2m"][hourly["time"].index(local_start.strftime("%Y-%m-%dT%H:00"))]
         return None if value is None else float(value)
     except (KeyError, ValueError, IndexError, TypeError):
         return None
@@ -40,7 +45,7 @@ def fetch_forecast(
     if days_ahead < 0 or days_ahead > FORECAST_HORIZON_DAYS:
         return None
     params = {
-        "latitude": lat, "longitude": lon, "timezone": "UTC",
+        "latitude": lat, "longitude": lon, "timezone": "auto" if start_utc is not None else "UTC",   # auto: czas lokalny toru
         "daily": "precipitation_probability_max,temperature_2m_max",
         "start_date": race_date.isoformat(), "end_date": race_date.isoformat(),
     }
@@ -53,14 +58,19 @@ def fetch_forecast(
         resp.raise_for_status()
         data = resp.json()
         daily = data["daily"]
-        i = daily["time"].index(race_date.isoformat())
+        local_start = _local_start(data, start_utc) if start_utc is not None else None
+        day = local_start.date() if local_start is not None else race_date      # dzień wyścigu u siebie, nie w UTC
+        if day.isoformat() not in daily["time"]:
+            day = race_date
+        i = daily["time"].index(day.isoformat())
         rain = daily["precipitation_probability_max"][i]
         temp = daily["temperature_2m_max"][i]
         if rain is None or temp is None:
             return None
         return WeatherForecast(
             rain_probability=rain / 100, temperature_c=temp, fetched_at=datetime.now(timezone.utc),
-            start_temperature_c=_start_temperature(data, start_utc),
+            start_temperature_c=_start_temperature(data, local_start),
+            start_local_time=local_start.strftime("%H:%M") if local_start is not None else None,
         )
     except (httpx.HTTPError, KeyError, ValueError, IndexError):
         return None

@@ -106,3 +106,26 @@ def test_hourly_request_never_asks_beyond_the_16_day_horizon():
     race_day = date(2026, 11, 28)                        # dokładnie 16 dni od TODAY
     fetch_forecast(36.11, -115.17, race_day, http=client(handler), today=TODAY, start_utc=datetime(2026, 11, 28, 4, tzinfo=timezone.utc))
     assert date.fromisoformat(seen["end_date"]) <= date(2026, 11, 28)           # TODAY + 16
+
+
+def local_handler(request):
+    """Odpowiedź z timezone=auto dla Las Vegas: czas lokalny (UTC-8), więc start 04:00 UTC to 20:00 poprzedniego dnia."""
+    assert request.url.params["timezone"] == "auto"
+    return httpx.Response(200, json={
+        "utc_offset_seconds": -28800,
+        "daily": {"time": ["2026-11-20", "2026-11-21", "2026-11-22"],
+                  "precipitation_probability_max": [10, 4, 70], "temperature_2m_max": [18.0, 11.1, 12.0]},
+        "hourly": {"time": ["2026-11-20T19:00", "2026-11-20T20:00", "2026-11-20T21:00", "2026-11-21T04:00"],
+                   "temperature_2m": [11.0, 9.0, 8.5, 99.0]},
+    })
+
+
+def test_start_temperature_is_taken_at_the_local_start_hour_not_utc_hour():
+    f = fetch_forecast(36.11, -115.17, date(2026, 11, 21), http=client(local_handler), today=TODAY, start_utc=START)
+    assert f.start_temperature_c == pytest.approx(9.0)          # 20:00 w Las Vegas, a nie 04:00 (99.0) ani żadna inna godzina
+    assert f.start_local_time == "20:00"
+
+
+def test_rain_and_daily_max_are_for_the_local_race_day():
+    f = fetch_forecast(36.11, -115.17, date(2026, 11, 21), http=client(local_handler), today=TODAY, start_utc=START)
+    assert f.rain_probability == pytest.approx(0.10) and f.temperature_c == pytest.approx(18.0)      # dzień 20.11 lokalnie

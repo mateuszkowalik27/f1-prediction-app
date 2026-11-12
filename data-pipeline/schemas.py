@@ -36,6 +36,7 @@ class WeatherForecast(BaseModel):
     temperature_c: float
     fetched_at: datetime
     start_temperature_c: float | None = None   # temperatura powietrza o godzinie startu wyścigu (prognoza godzinowa)
+    start_local_time: str | None = None        # godzina startu wyścigu w czasie lokalnym toru, np. "20:00"
 
 
 class TrackProfile(BaseModel):
