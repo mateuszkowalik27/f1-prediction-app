@@ -1,9 +1,15 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockData } from '../test/mockData.js'
 import Calendar from './Calendar.jsx'
 
-afterEach(() => vi.unstubAllGlobals())
+// Domyślnie "jest" 30 marca 2027: rundy 1 i 2 mają za sobą wyścig, więc najbliższa (rozwinięta od razu) jest runda 3.
+const at = (iso) => vi.useFakeTimers({ toFake: ['Date'], now: new Date(iso) })
+beforeEach(() => at('2027-03-30T12:00:00Z'))
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 const roundButton = (name) => screen.getByRole('button', { name: new RegExp(name) })
 
@@ -41,8 +47,43 @@ describe('Calendar screen', () => {
     render(<Calendar />)
     await screen.findByText(/Japanese Grand Prix/)
     expect(roundButton('Japanese')).toHaveTextContent('do ustalenia')
-    fireEvent.click(roundButton('Japanese'))
-    expect(screen.getByText('Kwalifikacje').closest('li')).toHaveTextContent('do ustalenia')
+    expect(screen.getByText('Kwalifikacje').closest('li')).toHaveTextContent('do ustalenia')   // najbliższa runda: już rozwinięta
+  })
+
+  describe('the next round is expanded by default', () => {
+    const expandedRounds = async () => {
+      render(<Calendar />)
+      await screen.findByText(/Australian Grand Prix/)
+      return screen.getAllByRole('button').filter((b) => b.getAttribute('aria-expanded') === 'true').map((b) => b.textContent)
+    }
+
+    it('opens the upcoming round when none has started', async () => {
+      at('2027-03-01T12:00:00Z')
+      mockData()
+      expect(await expandedRounds()).toEqual([expect.stringContaining('Australian')])
+    })
+
+    it('keeps the round open during its race weekend and for a few hours after the start', async () => {
+      at('2027-03-14T06:00:00Z')            // wyścig o 04:00 UTC trwa do ok. 07:00
+      mockData()
+      expect(await expandedRounds()).toEqual([expect.stringContaining('Australian')])
+    })
+
+    it('moves on to the following round once the race is over', async () => {
+      at('2027-03-14T08:00:00Z')
+      mockData()
+      expect(await expandedRounds()).toEqual([expect.stringContaining('Chinese')])
+    })
+
+    it('lets the user collapse it and open another', async () => {
+      mockData()
+      render(<Calendar />)
+      await screen.findByText(/Japanese Grand Prix/)
+      fireEvent.click(roundButton('Japanese'))
+      expect(roundButton('Japanese')).toHaveAttribute('aria-expanded', 'false')
+      fireEvent.click(roundButton('Australian'))
+      expect(roundButton('Australian')).toHaveAttribute('aria-expanded', 'true')
+    })
   })
 
   it('shows an error when the calendar cannot be loaded', async () => {

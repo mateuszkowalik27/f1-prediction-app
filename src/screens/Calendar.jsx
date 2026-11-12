@@ -1,14 +1,21 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import RoundSessions from '../components/RoundSessions.jsx'
 import { LoadError, Loading } from '../components/Status.jsx'
 import { useData } from '../lib/data.js'
-import { formatWarsaw } from '../lib/time.js'
+import { formatWarsaw, nextRound } from '../lib/time.js'
 
 const raceDay = (race) => formatWarsaw(race.sessions.find((s) => s.name === 'Race')?.start_utc, { day: 'numeric', month: 'short' })
 
 export default function Calendar() {
   const { data, error, loading } = useData('calendar.json')
-  const [open, setOpen] = useState(null)
+  // undefined = użytkownik jeszcze niczego nie klikał: wtedy pokazujemy rozwiniętą najbliższą rundę
+  const [open, setOpen] = useState(undefined)
+  const nextRef = useRef(null)
+  const next = Array.isArray(data?.races) ? nextRound(data.races) : null
+
+  useEffect(() => {
+    nextRef.current?.scrollIntoView?.({ block: 'start' })   // najbliższa runda jest nisko na liście: przewijamy do niej
+  }, [next])
 
   if (loading) return <Loading />
   if (error || !Array.isArray(data?.races)) return <LoadError />
@@ -18,9 +25,9 @@ export default function Calendar() {
     <>
       <h2>{`Kalendarz ${data.season}`}</h2>
       {races.map((race) => {
-        const expanded = open === race.round
+        const expanded = (open === undefined ? next : open) === race.round
         return (
-          <section className="card round" key={race.round}>
+          <section className="card round" key={race.round} ref={race.round === next ? nextRef : undefined}>
             <button
               className="round-button"
               aria-expanded={expanded}
