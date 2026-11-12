@@ -55,13 +55,15 @@ def default_track_stats(all_history: list[HistoricRace], ref_season: int) -> Tra
     )
 
 
-def _event_rate(safety: dict[int, list[SafetyEvent]], kind: str, ref_season: int) -> float:
+def _event_rate(safety: dict[int, list[SafetyEvent]], kind: str, ref_season: int, prior: float) -> float:
+    """Ważony odsetek wyścigów ze zdarzeniem, ściągnięty ku `prior`: kilka próbek to jeszcze nie pewność."""
     total = hit = 0.0
     for season, events in safety.items():
         w = _weight(season, ref_season)
         total += w
         hit += w * any(e.kind == kind for e in events)
-    return hit / total
+    k = config.SAFETY_PRIOR_STRENGTH
+    return (hit + k * prior) / (total + k)
 
 
 def compute_track_stats(
@@ -83,8 +85,8 @@ def compute_track_stats(
         stats = fallback.model_copy(update={"circuit_id": circuit_id, "sample_size": 0})
     if safety:
         stats = stats.model_copy(update={
-            "sc_probability": _event_rate(safety, "SC", ref_season),
-            "vsc_probability": _event_rate(safety, "VSC", ref_season),
+            "sc_probability": _event_rate(safety, "SC", ref_season, fallback.sc_probability),
+            "vsc_probability": _event_rate(safety, "VSC", ref_season, fallback.vsc_probability),
         })
     if override:
         updates = {k: v for k, v in override.model_dump().items() if v is not None}

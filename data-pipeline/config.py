@@ -40,6 +40,7 @@ TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
 RECENCY_HALF_LIFE_YEARS = 3
 DEFAULT_SC_PROBABILITY = 0.55
 DEFAULT_VSC_PROBABILITY = 0.25
+SAFETY_PRIOR_STRENGTH = 2.0   # ile "wirtualnych wyścigów" o domyślnym ryzyku dodajemy do historii toru
 DEFAULT_STOPS = 2
 RAIN_START_INTERMEDIATE = 0.6
 SC_ALT_THRESHOLD = 0.6

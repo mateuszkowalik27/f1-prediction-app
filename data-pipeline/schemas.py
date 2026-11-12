@@ -157,6 +157,17 @@ class WeightSnapshot(BaseModel):
     weights: dict[str, float]
 
 
+class WeightsFile(BaseModel):
+    """Zawartość weights.json: bieżące wagi (czynniki + grid_base_weight + race_noise_base) i ich historia."""
+    weights: dict[str, float]
+    history: list[WeightSnapshot]
+
+
+class ProfileCache(BaseModel):
+    """track_profiles.json: profile policzone z telemetrii (nie zmieniają się, więc liczymy je raz)."""
+    profiles: dict[str, TrackProfile]
+
+
 class WeekendPayload(BaseModel):
     race: Race
     weather: WeatherForecast | None

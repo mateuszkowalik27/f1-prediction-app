@@ -1,8 +1,12 @@
 """Klient Jolpica F1 API (następca Ergast): kalendarz, wyniki, klasyfikacje, historia torów."""
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import time
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 
@@ -39,21 +43,62 @@ def _utc(date_str: str, time_str: str | None) -> datetime | None:
 
 
 class JolpicaClient:
-    def __init__(self, http: httpx.Client | None = None, retry_delay: float = 1.0, attempts: int = 3):
+    """Klient z odstępem między zapytaniami (limit Jolpica: ~4/s i ~200/h) oraz cache'em na dysku.
+
+    Cache obejmuje tylko zakończone sezony (rok < immutable_before): ich dane już się nie zmieniają.
+    """
+
+    def __init__(
+        self, http: httpx.Client | None = None, retry_delay: float = 1.0, attempts: int = 3,
+        min_interval: float = 0.3, cache_dir: Path | None = None, immutable_before: int | None = None,
+        sleep=time.sleep,
+    ):
         self._http = http or httpx.Client(timeout=30)
         self._retry_delay = retry_delay
         self._attempts = attempts
+        self._min_interval = min_interval
+        self._cache_dir = Path(cache_dir) if cache_dir else None
+        self._immutable_before = immutable_before
+        self._sleep = sleep
+        self._last_request = 0.0
+
+    # --- cache ---
+    def _cache_file(self, path: str, params: dict | None) -> Path | None:
+        if self._cache_dir is None or self._immutable_before is None:
+            return None
+        match = re.match(r"^/(\d{4})[/.]", path)
+        if not match or int(match.group(1)) >= self._immutable_before:
+            return None
+        key = hashlib.sha1(f"{path}?{sorted((params or {}).items())}".encode()).hexdigest()[:16]
+        return self._cache_dir / f"{path.strip('/').replace('/', '_')}_{key}.json"
 
     # --- niskopoziomowe pobieranie ---
+    def _throttle(self) -> None:
+        wait = self._min_interval - (time.monotonic() - self._last_request)
+        if wait > 0:
+            self._sleep(wait)
+        self._last_request = time.monotonic()
+
     def _get(self, path: str, params: dict | None = None) -> dict:
+        cached = self._cache_file(path, params)
+        if cached is not None and cached.exists():
+            return json.loads(cached.read_text())
         last: Exception | None = None
         for attempt in range(self._attempts):
+            delay = self._retry_delay * (attempt + 1)
             try:
+                self._throttle()
                 resp = self._http.get(f"{BASE_URL}{path}", params=params)
                 if resp.status_code >= 500 or resp.status_code == 429:
+                    retry_after = resp.headers.get("Retry-After", "")
+                    delay = float(retry_after) if retry_after.replace(".", "", 1).isdigit() else delay
                     raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
                 resp.raise_for_status()
-                return resp.json()["MRData"]
+                data = resp.json()["MRData"]
+                if cached is not None:
+                    cached.parent.mkdir(parents=True, exist_ok=True)
+                    cached.write_text(json.dumps(data))
+                return data
             except httpx.HTTPStatusError as exc:
                 last = exc
                 if exc.response.status_code < 500 and exc.response.status_code != 429:
@@ -61,7 +106,7 @@ class JolpicaClient:
             except (httpx.HTTPError, KeyError, ValueError) as exc:
                 last = exc
             if attempt < self._attempts - 1:
-                time.sleep(self._retry_delay * (attempt + 1))
+                self._sleep(delay)
         raise JolpicaError(f"Jolpica: {path} nie odpowiada ({last})")
 
     def _all_races(self, path: str) -> list[dict]:
@@ -158,6 +203,14 @@ class JolpicaClient:
         if not races or not races[0].get("Results"):
             raise NoResultsError(f"brak wyników: {season} runda {round}")
         return self._to_historic(races[0])
+
+    def qualifying_grid(self, season: int, round: int) -> dict[str, int] | None:
+        """driver_id -> pozycja w kwalifikacjach albo None, gdy kwalifikacje jeszcze się nie odbyły."""
+        data = self._get(f"/{season}/{round}/qualifying.json", {"limit": PAGE_LIMIT})
+        races = data["RaceTable"]["Races"]
+        if not races or not races[0].get("QualifyingResults"):
+            return None
+        return {r["Driver"]["driverId"]: int(r["position"]) for r in races[0]["QualifyingResults"]}
 
     def season_results(self, season: int, up_to_round: int) -> list[HistoricRace]:
         races = [self._to_historic(r) for r in self._all_races(f"/{season}/results.json")]

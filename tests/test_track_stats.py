@@ -54,8 +54,18 @@ def test_sc_probability_from_events():
     safety = {2024: [SafetyEvent(season=2024, kind="SC", lap=10)], 2023: []}
     s = stats([mk_race(2024, MONZA_LIKE)], safety=safety, ref=2024)
     w_old = 0.5 ** (1 / config.RECENCY_HALF_LIFE_YEARS)
-    assert s.sc_probability == pytest.approx(1 / (1 + w_old))
-    assert s.vsc_probability == 0.0
+    k = config.SAFETY_PRIOR_STRENGTH
+    fallback = default_track_stats([], 2024)
+    # ważony odsetek wyścigów z SC, ściągnięty ku wartości domyślnej (mało próbek = mniej pewności)
+    assert s.sc_probability == pytest.approx((1 + k * fallback.sc_probability) / (1 + w_old + k))
+    assert s.vsc_probability == pytest.approx((k * fallback.vsc_probability) / (1 + w_old + k))
+
+
+def test_sc_never_reaches_extremes_with_few_races():
+    safety = {y: [SafetyEvent(season=y, kind="VSC", lap=5)] for y in (2023, 2024, 2025)}
+    s = stats([mk_race(2025, MONZA_LIKE)], safety=safety, ref=2025)
+    assert 0.5 < s.vsc_probability < 1.0        # trzy wyścigi z VSC to nie pewność
+    assert 0.0 < s.sc_probability < 1.0
 
 
 def test_sc_falls_back_without_safety_data():

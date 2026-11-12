@@ -25,7 +25,7 @@ def make_client(routes):
         value = routes[key]
         return httpx.Response(200, json=value(request) if callable(value) else value)
 
-    return JolpicaClient(http=httpx.Client(transport=httpx.MockTransport(handler)), retry_delay=0)
+    return JolpicaClient(http=httpx.Client(transport=httpx.MockTransport(handler)), retry_delay=0, min_interval=0)
 
 
 def calendar_client(mutate=None):
@@ -159,7 +159,7 @@ def test_retries_then_raises_on_http_500():
         calls.append(1)
         return httpx.Response(500)
 
-    c = JolpicaClient(http=httpx.Client(transport=httpx.MockTransport(handler)), retry_delay=0)
+    c = JolpicaClient(http=httpx.Client(transport=httpx.MockTransport(handler)), retry_delay=0, min_interval=0)
     with pytest.raises(JolpicaError):
         c.calendar(2026)
     assert len(calls) == 3
@@ -173,6 +173,69 @@ def test_retries_then_succeeds():
         calls.append(1)
         return httpx.Response(500) if len(calls) < 3 else httpx.Response(200, json=data)
 
-    c = JolpicaClient(http=httpx.Client(transport=httpx.MockTransport(handler)), retry_delay=0)
+    c = JolpicaClient(http=httpx.Client(transport=httpx.MockTransport(handler)), retry_delay=0, min_interval=0)
     assert len(c.calendar(2026)) == 23
     assert len(calls) == 3
+
+
+def test_qualifying_grid_maps_driver_to_position():
+    c = make_client({"/2026/20/qualifying.json": fixture("jolpica_qualifying_2026_r20.json")})
+    grid = c.qualifying_grid(2026, 20)
+    assert grid["norris"] == 1
+    assert sorted(grid.values()) == list(range(1, len(grid) + 1))
+
+
+def test_qualifying_grid_none_before_qualifying():
+    empty = {"MRData": {"total": "0", "RaceTable": {"Races": []}}}
+    assert make_client({"/2026/21/qualifying.json": empty}).qualifying_grid(2026, 21) is None
+
+
+def counting_client(tmp_path, immutable_before=2026, sleeps=None, min_interval=0.0, status_sequence=None):
+    data = fixture("jolpica_calendar_2026.json")
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if status_sequence and len(calls) <= len(status_sequence):
+            code, headers = status_sequence[len(calls) - 1]
+            return httpx.Response(code, headers=headers)
+        return httpx.Response(200, json=data)
+
+    client = JolpicaClient(
+        http=httpx.Client(transport=httpx.MockTransport(handler)), retry_delay=0, min_interval=min_interval,
+        cache_dir=tmp_path, immutable_before=immutable_before,
+        sleep=(sleeps.append if sleeps is not None else (lambda s: None)),
+    )
+    return client, calls
+
+
+def test_cache_serves_finished_seasons_without_http_and_persists(tmp_path):
+    client, calls = counting_client(tmp_path)
+    client.calendar(2025)
+    client.calendar(2025)
+    assert len(calls) == 1                                   # drugi raz z dysku
+    again, calls2 = counting_client(tmp_path)
+    again.calendar(2025)
+    assert calls2 == []                                      # nowy klient, ten sam katalog: nadal z dysku
+
+
+def test_current_season_is_never_cached(tmp_path):
+    client, calls = counting_client(tmp_path)
+    client.calendar(2026)
+    client.calendar(2026)
+    assert len(calls) == 2
+
+
+def test_honors_retry_after_header(tmp_path):
+    sleeps = []
+    client, calls = counting_client(tmp_path, sleeps=sleeps, status_sequence=[(429, {"Retry-After": "2"})])
+    assert len(client.calendar(2026)) == 23
+    assert 2.0 in sleeps and len(calls) == 2
+
+
+def test_throttles_between_requests(tmp_path):
+    sleeps = []
+    client, _ = counting_client(tmp_path, sleeps=sleeps, min_interval=0.5)
+    client.calendar(2026)
+    client.calendar(2026)
+    assert any(0 < s <= 0.5 for s in sleeps)
