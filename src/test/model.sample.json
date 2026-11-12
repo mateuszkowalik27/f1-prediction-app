@@ -1,0 +1,79 @@
+{
+ "weights": {
+  "car_pace": 0.264,
+  "driver_form": 0.27,
+  "track_history": 0.063,
+  "practice_pace": 0.15,
+  "weekend_shift": 0.1,
+  "car_track_fit": 0.121,
+  "wet_skill": 0.05,
+  "reliability": 0.25,
+  "grid_base_weight": 1.284,
+  "race_noise_base": 0.571
+ },
+ "weight_history": [
+  {
+   "round": 13,
+   "weights": {
+    "car_pace": 0.264,
+    "driver_form": 0.2,
+    "track_history": 0.063,
+    "practice_pace": 0.15,
+    "weekend_shift": 0.1,
+    "car_track_fit": 0.121,
+    "wet_skill": 0.05,
+    "reliability": 0.207,
+    "grid_base_weight": 1.284,
+    "race_noise_base": 0.571
+   }
+  },
+  {
+   "round": 14,
+   "weights": {
+    "car_pace": 0.264,
+    "driver_form": 0.27,
+    "track_history": 0.063,
+    "practice_pace": 0.15,
+    "weekend_shift": 0.1,
+    "car_track_fit": 0.121,
+    "wet_skill": 0.05,
+    "reliability": 0.25,
+    "grid_base_weight": 1.284,
+    "race_noise_base": 0.571
+   }
+  }
+ ],
+ "factors_used": [
+  "car_pace",
+  "driver_form",
+  "reliability"
+ ],
+ "factors_skipped": [
+  "practice_pace",
+  "weekend_shift",
+  "wet_skill"
+ ],
+ "evaluation": [
+  {
+   "round": 12,
+   "winner_prob": 0.3,
+   "winner_in_top3": true,
+   "mean_abs_position_error": 2.7,
+   "brier_win": 0.031
+  },
+  {
+   "round": 13,
+   "winner_prob": 0.05,
+   "winner_in_top3": false,
+   "mean_abs_position_error": 3.1,
+   "brier_win": 0.046
+  },
+  {
+   "round": 14,
+   "winner_prob": 0.55,
+   "winner_in_top3": true,
+   "mean_abs_position_error": 2.1,
+   "brier_win": 0.012
+  }
+ ]
+}

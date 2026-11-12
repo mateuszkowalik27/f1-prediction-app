@@ -45,3 +45,18 @@ export function stopsLabel(n) {
   if (n === 1) return '1 pit-stop'
   return n >= 2 && n <= 4 ? `${n} pit-stopy` : `${n} pit-stopów`
 }
+
+// Liczba w polskim zapisie: 0.2 -> "0,20"
+export const num = (value, digits = 2) =>
+  value.toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+
+// Zmiany wag między dwiema ostatnimi rundami, np. "forma kierowcy: 0,20 → 0,27 po rundzie 14".
+// Pomijamy wagi, które po zaokrągleniu wyglądają tak samo.
+export function weightChanges(history) {
+  if (!Array.isArray(history) || history.length < 2) return []
+  const previous = history[history.length - 2]
+  const last = history[history.length - 1]
+  return Object.keys(last.weights)
+    .filter((key) => key in previous.weights && num(previous.weights[key]) !== num(last.weights[key]))
+    .map((key) => `${factorLabel(key)}: ${num(previous.weights[key])} → ${num(last.weights[key])} po rundzie ${last.round}`)
+}

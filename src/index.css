@@ -87,3 +87,8 @@ td.num, th.num { text-align: right; }
   font: inherit; text-align: left; cursor: pointer;
 }
 .block { display: block; }
+
+.weight { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.weight .bar { width: 64px; }
+
+.badge { white-space: nowrap; }
