@@ -1,11 +1,27 @@
 import { useState } from 'react'
 import { LoadError, Loading } from '../components/Status.jsx'
+import DriverCell from '../components/DriverCell.jsx'
 import { useData } from '../lib/data.js'
+import { driverMaps } from '../lib/drivers.js'
+import { teamColors, teamLogo } from '../lib/teams.js'
 
 const VIEWS = [
   { id: 'drivers', label: 'Kierowcy', header: 'Kierowca' },
   { id: 'constructors', label: 'Zespoły', header: 'Zespół' },
 ]
+
+// Zespół: pasek w jego barwach, białe logo i nazwa.
+function TeamCell({ row }) {
+  const colors = teamColors(row.id)
+  const logo = teamLogo(row.id)
+  return (
+    <span className="driver">
+      <span className="team-bar" style={colors ? { background: colors.bg } : undefined} />
+      {logo ? <img className="team-logo" src={logo} alt="" /> : <span className="team-logo" />}
+      <span className="driver-name">{row.name}</span>
+    </span>
+  )
+}
 
 export default function Standings() {
   const { data, error, loading } = useData('standings.json')
@@ -15,6 +31,7 @@ export default function Standings() {
   if (error || !data?.drivers || !data?.constructors) return <LoadError />
   const { header } = VIEWS.find((v) => v.id === view)
   const rows = data[view]
+  const drivers = driverMaps(data)
 
   return (
     <>
@@ -30,7 +47,8 @@ export default function Standings() {
         <p className="card muted">Klasyfikacja pojawi się po pierwszym wyścigu sezonu.</p>
       ) : (
         <section className="card">
-          <table>
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Klasyfikacja (przewiń w bok)">
+          <table className="standings">
             <thead>
               <tr>
                 <th>Poz.</th>
@@ -43,13 +61,14 @@ export default function Standings() {
               {rows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.position}</td>
-                  <td>{row.name}</td>
+                  <td>{view === 'drivers' ? <DriverCell id={row.id} drivers={drivers} /> : <TeamCell row={row} />}</td>
                   <td className="num">{row.points}</td>
                   <td className="num">{row.wins}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </section>
       )}
     </>

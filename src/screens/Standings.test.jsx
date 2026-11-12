@@ -10,17 +10,27 @@ describe('Standings screen', () => {
     mockData()
     render(<Standings />)
     const rows = (await screen.findAllByRole('row')).slice(1)
-    expect(within(rows[0]).getAllByRole('cell').map((c) => c.textContent)).toEqual(['1', 'Andrea Kimi Antonelli', '100', '1'])
+    expect(within(rows[0]).getAllByRole('cell').map((c) => c.textContent)).toEqual(['1', 'A. AntonelliANT', '100', '1'])
     expect(screen.getByRole('button', { name: 'Kierowcy' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('switches between drivers and constructors', async () => {
     mockData()
     render(<Standings />)
-    await screen.findByText('Andrea Kimi Antonelli')
+    await screen.findByText('A. Antonelli')
     fireEvent.click(screen.getByRole('button', { name: 'Zespoły' }))
     expect(screen.getByText('Mercedes')).toBeInTheDocument()
-    expect(screen.queryByText('Andrea Kimi Antonelli')).not.toBeInTheDocument()
+    expect(screen.queryByText('A. Antonelli')).not.toBeInTheDocument()
+  })
+
+  it('shows the team logo and color bar for constructors', async () => {
+    mockData()
+    render(<Standings />)
+    await screen.findByText('A. Antonelli')
+    fireEvent.click(screen.getByRole('button', { name: 'Zespoły' }))
+    const row = screen.getByText('Mercedes').closest('tr')
+    expect(row.querySelector('img.team-logo')).not.toBeNull()
+    expect(row.querySelector('.team-bar').style.background).not.toBe('')
   })
 
   it('names the season when the table is not from the current one', async () => {
