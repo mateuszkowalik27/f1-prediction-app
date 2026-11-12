@@ -75,6 +75,22 @@ class HistoricRace(BaseModel):
     results: list[HistoricResult]
 
 
+class PracticeData(BaseModel):
+    # driver_id -> lista (mieszanka, mediana 3 najszybszych okrążeń w sekundach)
+    best_runs: dict[str, list[tuple[str, float]]]
+
+
+class SafetyEvent(BaseModel):
+    season: int
+    kind: Literal["SC", "VSC"]
+    lap: int
+
+
+class TyreHistory(BaseModel):
+    median_stops: int
+    dominant_compounds: list[str]
+
+
 class DriverProbability(BaseModel):
     driver_id: str
     win: float
