@@ -4,7 +4,9 @@ from datetime import datetime, timezone
 from fetch.jolpica import JolpicaError
 from helpers import hist_race, make_entries
 from run import Clients
-from schemas import PitStop, QualiTimes, Race, Session, StandingRow, Standings, WeatherForecast
+from schemas import (
+    PitStop, QualiTimes, Race, Session, SessionRow, SessionTable, StandingRow, Standings, WeatherForecast,
+)
 
 UTC = timezone.utc
 
@@ -27,7 +29,8 @@ CALENDAR = [mk_race(1, 3, 14), mk_race(2, 3, 28), mk_race(3, 4, 11)]
 class FakeJolpica:
     def __init__(self, fail=False, grid=None, with_history=True, empty_round=None, extra_entry=False,
                  completed=2, entries_current=True, empty_standings=False, fail_results=False, quali_entries=None,
-                 fail_quali_times=False):
+                 fail_quali_times=False, fail_tables=False):
+        self.fail_tables = fail_tables
         self.fail, self.grid, self.with_history, self.empty_round = fail, grid, with_history, empty_round
         self.extra_entry = extra_entry
         self.completed = completed
@@ -81,6 +84,18 @@ class FakeJolpica:
         return [QualiTimes(driver_id="d1", q1=80.0, q2=79.0, q3=78.0), QualiTimes(driver_id="d2", q1=80.4, q2=79.5, q3=78.6),
                 QualiTimes(driver_id="d3", q1=80.8, q2=79.9), QualiTimes(driver_id="d4", q1=81.5)]
 
+    def qualifying_table(self, season, round):
+        if self.fail_tables:
+            raise JolpicaError("awaria tabel")
+        return [SessionRow(driver_id="d1", position=1, q1=80.0, q2=79.0, q3=78.0),
+                SessionRow(driver_id="d4", position=2, q1=81.5)]
+
+    def race_table(self, season, round, sprint=False):
+        if self.fail_tables:
+            raise JolpicaError("awaria tabel")
+        return [SessionRow(driver_id="d1", position=1, time="1:30:00.000", status="Finished", laps=50),
+                SessionRow(driver_id="d2", position=2, time="+5.123", status="Finished", laps=50)]
+
     def pit_stops(self, season, round):
         return [PitStop(driver_id=d, lap=10 + i, duration_s=s)
                 for i, (d, s) in enumerate([("d1", 23.0), ("d2", 23.4), ("d3", 25.0), ("d4", 25.4)])]
@@ -100,7 +115,12 @@ class FakeOpenF1:
         self.errors = 0
         self.laps, self.weather, self.grid = laps, weather, grid
         self.trace_requests = []
+        self.practice_tables = None            # tabele najlepszych okrążeń (trening) zwracane przez best_laps
         self.calls = []                       # nazwy wywołanych nowych metod (model v2)
+
+    def best_laps(self, race, entries):
+        self.calls.append("best_laps")
+        return self.practice_tables
 
     def race_laps(self, race, entries):
         self.calls.append("race_laps")

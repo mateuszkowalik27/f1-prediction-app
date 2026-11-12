@@ -28,6 +28,7 @@ from factors.tyre_deg_fit import track_deg_ratio
 from evaluation import RoundCase, evaluate, prepare_rounds, score_rounds
 from fetch.jolpica import JolpicaClient, JolpicaError
 from history_store import HistoryStore
+from results import update_results
 from fetch.openf1 import OpenF1Client
 from fetch.openmeteo import fetch_forecast, wet_races
 from optional import optional as _optional
@@ -284,6 +285,14 @@ def _backfill_history(store: HistoryStore, clients: Clients, season: int, now: d
         print(f"UWAGA: uzupełnianie historii nie zadziałało ({type(exc).__name__}: {exc}); pomijam.", file=sys.stderr)
 
 
+def _update_results(out_dir: Path, calendar: list[Race], clients: Clients, now: datetime) -> None:
+    """Wyniki sesji do Kalendarza: dodatek, każdy błąd tylko pomija uzupełnianie."""
+    try:
+        update_results(out_dir, calendar, clients, now)
+    except Exception as exc:  # noqa: BLE001
+        print(f"UWAGA: wyniki sesji nie zadziałały ({type(exc).__name__}: {exc}); pomijam.", file=sys.stderr)
+
+
 def _live_evaluation(out_dir: Path, season: int, cases: list[RoundCase]):
     """Ocena przewidywań zapisanych tuż przed startem wyścigu (tych, które użytkownik faktycznie widział)."""
     result = []
@@ -336,6 +345,7 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
         standings = previous.model_copy(update={"season": season - 1}) if previous.drivers else standings
     store = HistoryStore(out_dir / "history")
     _backfill_history(store, clients, season, now_utc)
+    _update_results(out_dir, calendar, clients, now_utc)
     aggregates = store.all()
     cases = prepare_rounds(season, clients, calendar, aggregates)   # awaria Jolpica przerywa przebieg: pliki zostają nietknięte
     weights_file = _tuned_weights(out_dir, cases, season)

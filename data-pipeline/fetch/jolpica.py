@@ -11,8 +11,8 @@ from pathlib import Path
 import httpx
 
 from schemas import (
-    Calendar, DriverEntry, HistoricRace, HistoricResult, PitStop, QualiTimes, Race, Session, StandingRow,
-    Standings,
+    Calendar, DriverEntry, HistoricRace, HistoricResult, PitStop, QualiTimes, Race, Session, SessionRow,
+    StandingRow, Standings,
 )
 
 BASE_URL = "https://api.jolpi.ca/ergast/f1"
@@ -252,6 +252,31 @@ class JolpicaClient:
             QualiTimes(driver_id=r["Driver"]["driverId"], q1=_seconds(r.get("Q1")), q2=_seconds(r.get("Q2")),
                        q3=_seconds(r.get("Q3")))
             for r in races[0]["QualifyingResults"]
+        ]
+
+    def qualifying_table(self, season: int, round: int) -> list[SessionRow] | None:
+        """Klasyfikacja kwalifikacji z czasami Q1/Q2/Q3 albo None, gdy kwalifikacji jeszcze nie było."""
+        data = self._get(f"/{season}/{round}/qualifying.json", {"limit": PAGE_LIMIT})
+        races = data["RaceTable"]["Races"]
+        if not races or not races[0].get("QualifyingResults"):
+            return None
+        return [
+            SessionRow(driver_id=r["Driver"]["driverId"], position=int(r["position"]),
+                       q1=_seconds(r.get("Q1")), q2=_seconds(r.get("Q2")), q3=_seconds(r.get("Q3")))
+            for r in races[0]["QualifyingResults"]
+        ]
+
+    def race_table(self, season: int, round: int, sprint: bool = False) -> list[SessionRow] | None:
+        """Wyniki wyścigu (albo sprintu): pozycja, czas zwycięzcy / strata, status. None, gdy jeszcze ich nie ma."""
+        key, path = ("SprintResults", "sprint") if sprint else ("Results", "results")
+        data = self._get(f"/{season}/{round}/{path}.json", {"limit": PAGE_LIMIT})
+        races = data["RaceTable"]["Races"]
+        if not races or not races[0].get(key):
+            return None
+        return [
+            SessionRow(driver_id=r["Driver"]["driverId"], position=int(r["position"]), time=(r.get("Time") or {}).get("time"),
+                       status=r.get("status"), laps=int(r["laps"]) if str(r.get("laps", "")).isdigit() else None)
+            for r in races[0][key]
         ]
 
     def pit_stops(self, season: int, round: int) -> list[PitStop]:

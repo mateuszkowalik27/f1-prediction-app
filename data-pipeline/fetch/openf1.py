@@ -14,13 +14,16 @@ from urllib.parse import quote
 import httpx
 
 from schemas import (
-    DriverEntry, HistoricRace, LapRecord, PracticeData, Race, SafetyEvent, TyreHistory, WeatherSample,
+    DriverEntry, HistoricRace, LapRecord, PracticeData, Race, SafetyEvent, SessionRow, SessionTable, TyreHistory,
+    WeatherSample,
 )
 
 BASE_URL = "https://api.openf1.org/v1"
 SLOW_LAP_RATIO = 1.07          # okrążenia wolniejsze niż 107% najlepszego w sesji są odrzucane
 MIN_SPEED_SAMPLES = 50
 DRY_COMPOUNDS = {"SOFT", "MEDIUM", "HARD"}
+BEST_LAP_SESSIONS = {"Practice 1": "FP1", "Practice 2": "FP2", "Practice 3": "FP3",
+                     "Sprint Qualifying": "SprintQualifying", "Sprint Shootout": "SprintQualifying"}
 
 
 class OpenF1Unavailable(RuntimeError):
@@ -56,14 +59,16 @@ class OpenF1Client:
     def _get(self, path: str, query: dict) -> list[dict]:
         qs = "&".join(f"{k}={quote(str(v), safe=':-')}" for k, v in query.items())
         url = f"{BASE_URL}{path}?{qs}"
-        for attempt in range(4):
+        for attempt in range(5):
             wait = self._min_interval - (time.monotonic() - self._last)
             if wait > 0:
                 self._sleep(wait)
             self._last = time.monotonic()
             resp = self._http.get(url)
             if resp.status_code == 429:
-                self._sleep(1.0 * (attempt + 1))
+                retry_after = resp.headers.get("Retry-After", "")
+                wait_s = float(retry_after) if retry_after.replace(".", "", 1).isdigit() else 2.0 * (attempt + 1)
+                self._sleep(min(wait_s, 30.0))      # słuchamy serwera, ale nie czekamy dłużej niż pół minuty
                 continue
             if resp.status_code == 404:
                 return []  # OpenF1 zwraca 404 "No results found" zamiast pustej listy
@@ -265,6 +270,37 @@ class OpenF1Client:
             grid = {num_to_id[r["driver_number"]]: int(r["position"])
                     for r in rows if num_to_id.get(r.get("driver_number"))}
             return grid or None
+        except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
+            self.errors += 1
+            return None
+
+    # --- wyniki sesji: najlepsze okrążenia z treningów i sprint-kwalifikacji ---
+    def best_laps(self, race: Race, entries: list[DriverEntry]) -> dict[str, SessionTable] | None:
+        """Tabele (kierowca -> najlepsze okrążenie, od najszybszego) dla treningów i sprint-kwalifikacji weekendu.
+        Brak danych lub błąd -> None; sesja bez żadnego czasu jest pomijana."""
+        try:
+            day = _race_day(race)
+            if day is None:
+                return None
+            code_to_id = {e.code: e.driver_id for e in entries}
+            out: dict[str, SessionTable] = {}
+            for s in self._sessions(day):
+                name = BEST_LAP_SESSIONS.get(s["session_name"])
+                if not name:
+                    continue
+                key = s["session_key"]
+                num_to_id = {d["driver_number"]: code_to_id.get(d["name_acronym"])
+                             for d in self._get("/drivers", {"session_key": key})}
+                best: dict[str, float] = {}
+                for lap in self._get("/laps", {"session_key": key}):
+                    driver_id, duration = num_to_id.get(lap.get("driver_number")), lap.get("lap_duration")
+                    if driver_id and duration and duration < best.get(driver_id, float("inf")):
+                        best[driver_id] = float(duration)
+                if best:
+                    ranked = sorted(best.items(), key=lambda kv: kv[1])
+                    out[name] = SessionTable(kind="practice", rows=[
+                        SessionRow(driver_id=d, position=i + 1, best_s=t) for i, (d, t) in enumerate(ranked)])
+            return out or None
         except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
             self.errors += 1
             return None

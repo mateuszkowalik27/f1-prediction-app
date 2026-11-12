@@ -6,6 +6,21 @@ import { formatWarsaw } from '../lib/time.js'
 
 const raceDay = (race) => formatWarsaw(race.sessions.find((s) => s.name === 'Race')?.start_utc, { day: 'numeric', month: 'short' })
 
+// Sesje rundy; wyniki (jeśli robot je zapisał) wczytujemy dopiero po rozwinięciu. Brak pliku = zwykła lista.
+function RoundSessions({ race }) {
+  const results = useData(`results/${race.season}-${race.round}.json`)
+  const standings = useData('standings.json')
+  const drivers = standings.data?.drivers ?? []
+  return (
+    <SessionList
+      sessions={race.sessions}
+      results={results.data?.sessions ?? null}
+      nameById={Object.fromEntries(drivers.map((d) => [d.id, d.name]))}
+      numberById={Object.fromEntries(drivers.map((d) => [d.id, d.number]))}
+    />
+  )
+}
+
 export default function Calendar() {
   const { data, error, loading } = useData('calendar.json')
   const [open, setOpen] = useState(null)
@@ -36,7 +51,7 @@ export default function Calendar() {
             </button>
             {expanded && (
               <div id={`round-${race.round}`}>
-                <SessionList sessions={race.sessions} />
+                <RoundSessions race={race} />
               </div>
             )}
           </section>

@@ -290,3 +290,30 @@ class Meta(BaseModel):
     generated_at: datetime
     season: int
     data_sources: dict[str, Literal["ok", "missing", "failed"]]
+
+
+class SessionRow(BaseModel):
+    """Jeden wiersz tabeli wyników sesji; które pola są wypełnione, zależy od rodzaju sesji (SessionTable.kind)."""
+    driver_id: str
+    position: int | None = None
+    best_s: float | None = None     # trening, sprint-kwalifikacje: najlepsze okrążenie (sekundy)
+    q1: float | None = None         # kwalifikacje: najlepsze czasy z części sesji
+    q2: float | None = None
+    q3: float | None = None
+    time: str | None = None         # sprint/wyścig: czas zwycięzcy ("1:32:15.554") albo strata ("+7.152"), jak podaje Jolpica
+    status: str | None = None       # sprint/wyścig: "Finished", "+1 Lap", "Retired" ...
+    laps: int | None = None
+
+
+class SessionTable(BaseModel):
+    kind: Literal["practice", "qualifying", "race"]
+    rows: list[SessionRow]
+
+
+class RoundResults(BaseModel):
+    """public/data/results/<sezon>-<runda>.json: wyniki zakończonych sesji rundy (klucze: nazwy sesji z kalendarza)."""
+    season: int
+    round: int
+    generated_at: datetime
+    sessions: dict[str, SessionTable]
+    attempts: dict[str, int] = {}     # sesja -> ile razy próbowaliśmy ją pobrać bez skutku (po limicie rezygnujemy)

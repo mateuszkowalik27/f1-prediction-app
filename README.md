@@ -114,6 +114,13 @@ npm run build       # wersja produkcyjna do katalogu dist
 Czynniki, które wypadły, zostają w kodzie z wagą 0 i wpisem w `LOCKED_WEIGHTS` (`config.py`): można je wrócić, gdy
 będzie więcej wyścigów. Uwaga: `pit_stop` może częściowo wynikać z tego, że najlepsze zespoły mają też najlepsze załogi.
 
+## Wyniki sesji w Kalendarzu
+
+Po rozwinięciu rundy zakończone sesje mają przycisk „Wyniki": treningi i kwalifikacje sprintu (najlepszy czas
+kierowcy, z OpenF1), kwalifikacje (Q1, Q2, Q3), sprint i wyścig (czas zwycięzcy, straty, DNF z powodem; z Jolpica).
+Robot zapisuje je do `public/data/results/<sezon>-<runda>.json` (tylko bieżący sezon), po 2 godzinach od końca
+sesji, i ponawia brakujące do 6 razy na sesję. Sesji, które się nie odbyły, nie dotyka.
+
 ## Ograniczenia, o których warto wiedzieć
 
 - **Poprawki bolidów model widzi dopiero po piątkowych treningach** (przez zmianę tempa zespołu). Wcześniej nie wie,
