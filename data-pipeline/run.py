@@ -77,6 +77,14 @@ def select_next_race(races: list[Race], now_utc: datetime) -> Race | None:
     return None
 
 
+def resolve_season(now_utc: datetime, jolpica) -> int:
+    """Bieżący sezon: rok kalendarzowy, dopóki ma nadchodzące rundy; potem następny, jeśli jego kalendarz jest już znany."""
+    year = now_utc.year
+    if select_next_race(jolpica.calendar(year), now_utc) is not None:
+        return year
+    return year + 1 if jolpica.calendar(year + 1) else year
+
+
 def resolve_grid(race: Race, now_utc: datetime, jolpica, predicted: dict[str, int]) -> tuple[dict[str, int], str]:
     quali = next((s.start_utc for s in race.sessions if s.name == "Qualifying"), None)
     if quali and quali + QUALIFYING_DURATION <= now_utc:
@@ -288,10 +296,16 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
 def main(argv: list[str] | None = None, clients: Clients | None = None) -> int:
     parser = argparse.ArgumentParser(description="Aktualizacja danych F1 Prediction App")
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--season", type=int, default=config.SEASON)
+    parser.add_argument("--season", type=int, default=None, help="domyślnie: wybierany automatycznie")
     args = parser.parse_args(argv)
+    now = datetime.now(timezone.utc)
     try:
-        run_pipeline(args.out, args.season, datetime.now(timezone.utc), clients or default_clients(args.season))
+        if args.season is None:
+            probe = clients or default_clients(now.year)
+            season = resolve_season(now, probe.jolpica)
+        else:
+            season = args.season
+        run_pipeline(args.out, season, now, clients or default_clients(season))
     except JolpicaError as exc:
         print(f"BŁĄD: {exc}. Pliki nie zostały zmienione.", file=sys.stderr)
         return 1

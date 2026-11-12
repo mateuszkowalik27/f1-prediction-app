@@ -175,3 +175,38 @@ def test_locked_weight_from_config_is_not_tuned(tmp_path, monkeypatch):
 def test_no_weights_file_before_three_rounds(tmp_path):
     run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
     assert not (tmp_path / "weights.json").exists()
+
+
+class CalendarsOnly:
+    """Atrapa z kalendarzami wielu sezonów (do wyboru bieżącego sezonu)."""
+
+    def __init__(self, calendars):
+        self.calendars = calendars
+
+    def calendar(self, season):
+        return self.calendars.get(season, [])
+
+
+def season_calendar(year):
+    start = datetime(year, 11, 20, 13, 0, tzinfo=UTC)
+    race = CALENDAR[0].model_copy(update={"season": year, "sessions": [
+        Session(name="Race", start_utc=start)]})
+    return [race]
+
+
+def test_resolve_season_stays_on_current_year_while_races_remain():
+    from run import resolve_season
+    j = CalendarsOnly({2026: season_calendar(2026), 2027: season_calendar(2027)})
+    assert resolve_season(datetime(2026, 11, 12, tzinfo=UTC), j) == 2026
+
+
+def test_resolve_season_moves_to_next_year_when_season_over_and_calendar_published():
+    from run import resolve_season
+    j = CalendarsOnly({2026: season_calendar(2026), 2027: season_calendar(2027)})
+    assert resolve_season(datetime(2026, 12, 20, tzinfo=UTC), j) == 2027
+
+
+def test_resolve_season_stays_when_next_calendar_not_published():
+    from run import resolve_season
+    j = CalendarsOnly({2026: season_calendar(2026)})
+    assert resolve_season(datetime(2026, 12, 20, tzinfo=UTC), j) == 2026
