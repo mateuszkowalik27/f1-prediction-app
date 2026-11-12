@@ -10,6 +10,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from statistics import mean
 from typing import TYPE_CHECKING
 
@@ -21,7 +22,9 @@ from factors.reliability import dnf_rates
 from factors.track_profile import load_estimates
 from factors.track_stats import compute_track_stats, default_track_stats
 from fetch.jolpica import JolpicaError
-from schemas import DriverEntry, DriverProbability, Race, RaceAggregates, RaceEvaluation, TrackStats
+from schemas import (
+    DriverEntry, DriverProbability, Race, RaceAggregates, RaceEvaluation, TrackStats, WeatherForecast,
+)
 from simulate.race import apply_early_season, simulate_race
 from simulate.strategy import predict_strategy
 
@@ -82,6 +85,7 @@ def prepare_rounds(season: int, clients: "Clients", calendar: list[Race] | None 
     known = {e.driver_id: e for e in (j.entries(season) or j.entries(season - 1))}
     profiles = {**load_estimates(), **config.TRACK_PROFILE_OVERRIDES}
 
+    own_temp = {(a.season, a.round): a.air_temp_c for a in aggregates if a.air_temp_c is not None}
     cases = []
     for result in results:
         if not any(r.finish == 1 for r in result.results):
@@ -92,13 +96,17 @@ def prepare_rounds(season: int, clients: "Clients", calendar: list[Race] | None 
                    for r in result.results]
         circuit_history = [h for h in past if h.circuit_id == race.circuit_id]
         grid = {r.driver_id: r.grid for r in result.results}
-        pre = build_context(race, entries, history_pool, circuit_history, wet, None, None, grid,
+        # brak historycznych prognoz: zamiast nich faktyczna temperatura powietrza z tego wyścigu (lekko optymistyczne)
+        temp = own_temp.get((season, result.round))
+        standin = (WeatherForecast(rain_probability=0.0, temperature_c=temp, fetched_at=datetime.now(timezone.utc),
+                                   start_temperature_c=temp) if temp is not None else None)
+        pre = build_context(race, entries, history_pool, circuit_history, wet, standin, None, grid,
                             default_track_stats([], season), None, profiles, as_of_round=result.round,
                             aggregates=aggregates)
         track = compute_track_stats(race.circuit_id, pre.circuit_history, None, season,
                                     config.TRACK_OVERRIDES.get(race.circuit_id),
                                     default_track_stats(pre.history + pre.circuit_history, season))
-        ctx = build_context(race, entries, history_pool, circuit_history, wet, None, None, grid, track,
+        ctx = build_context(race, entries, history_pool, circuit_history, wet, standin, None, grid, track,
                             profiles.get(race.circuit_id), profiles, as_of_round=result.round,
                             aggregates=aggregates)
         dnf, sim_track = apply_early_season(dnf_rates(ctx), track, result.round)

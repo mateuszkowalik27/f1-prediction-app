@@ -24,6 +24,7 @@ from factors.registry import ALL_FACTORS
 from factors.reliability import dnf_rates
 from factors.track_profile import get_profile, load_estimates
 from factors.track_stats import compute_track_stats, default_track_stats
+from factors.tyre_deg_fit import track_deg_ratio
 from evaluation import RoundCase, evaluate, prepare_rounds, score_rounds
 from fetch.jolpica import JolpicaClient, JolpicaError
 from history_store import HistoryStore
@@ -53,7 +54,7 @@ EXTRA_WEIGHT_KEYS = ("grid_base_weight", "race_noise_base")
 class Clients:
     jolpica: JolpicaClient
     openf1: OpenF1Client
-    forecast: Callable[[float, float, date], WeatherForecast | None] = fetch_forecast
+    forecast: Callable[..., WeatherForecast | None] = fetch_forecast   # (lat, lon, dzień, start_utc=...)
     wet: Callable[[list[HistoricRace]], dict[tuple[int, int], bool]] = wet_races
 
 
@@ -217,8 +218,9 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
 
     wet = clients.wet(history + circuit_history)
     start = _race_start(race)
-    weather, weather_failed = (_optional("prognoza pogody", clients.forecast, race.lat, race.lon, start.date())
-                               if start else (None, False))
+    weather, weather_failed = (
+        _optional("prognoza pogody", lambda: clients.forecast(race.lat, race.lon, start.date(), start_utc=start))
+        if start else (None, False))
     practice, f1a = _optional("treningi OpenF1", f1.practice_pace, race, entries)
     safety, f1b = _optional("safety car OpenF1", f1.safety_events, race.circuit_id, circuit_history)
     tyre, f1c = _optional("opony OpenF1", f1.tyre_history, race.circuit_id, circuit_history)
@@ -240,7 +242,7 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     quali = predict_qualifying(combined.strength)
     quali_rows = _actual_quali_rows(start_grid.quali, drivers) if start_grid else quali.probabilities
     dnf, sim_track = apply_early_season(dnf_rates(ctx), track, race.round)
-    strategy = predict_strategy(track, weather, tyre)
+    strategy = predict_strategy(track, weather, tyre, track_deg_ratio(ctx))
     race_rows = simulate_race(   # bez siatki (przed kwalifikacjami) losujemy ją w każdej symulacji
         combined.strength, actual_grid, sim_track, dnf, strategy.primary.stops,
         grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),

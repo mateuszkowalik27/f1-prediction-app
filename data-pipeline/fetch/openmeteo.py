@@ -1,7 +1,7 @@
 """Open-Meteo: prognoza pogody na dzień wyścigu i archiwalne opady (do wykrywania mokrych wyścigów)."""
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
@@ -17,9 +17,22 @@ def _client(http: httpx.Client | None) -> httpx.Client:
     return http or httpx.Client(timeout=30)
 
 
+def _start_temperature(data: dict, start_utc: datetime | None) -> float | None:
+    """Temperatura powietrza z prognozy godzinowej dla godziny startu (UTC); brak sekcji lub godziny -> None."""
+    if start_utc is None:
+        return None
+    try:
+        hourly = data["hourly"]
+        key = start_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:00")
+        value = hourly["temperature_2m"][hourly["time"].index(key)]
+        return None if value is None else float(value)
+    except (KeyError, ValueError, IndexError, TypeError):
+        return None
+
+
 def fetch_forecast(
     lat: float, lon: float, race_date: date,
-    http: httpx.Client | None = None, today: date | None = None,
+    http: httpx.Client | None = None, today: date | None = None, start_utc: datetime | None = None,
 ) -> WeatherForecast | None:
     """Prognoza na dzień wyścigu albo None (za daleko w przyszłości, w przeszłości lub błąd API)."""
     today = today or datetime.now(timezone.utc).date()
@@ -31,10 +44,15 @@ def fetch_forecast(
         "daily": "precipitation_probability_max,temperature_2m_max",
         "start_date": race_date.isoformat(), "end_date": race_date.isoformat(),
     }
+    if start_utc is not None:
+        params["hourly"] = "temperature_2m"
+        params["start_date"] = (race_date - timedelta(days=1)).isoformat()   # zapas: godzina startu bywa już nazajutrz w UTC
+        params["end_date"] = min(race_date + timedelta(days=1), today + timedelta(days=FORECAST_HORIZON_DAYS)).isoformat()
     try:
         resp = _client(http).get(FORECAST_URL, params=params)
         resp.raise_for_status()
-        daily = resp.json()["daily"]
+        data = resp.json()
+        daily = data["daily"]
         i = daily["time"].index(race_date.isoformat())
         rain = daily["precipitation_probability_max"][i]
         temp = daily["temperature_2m_max"][i]
@@ -42,6 +60,7 @@ def fetch_forecast(
             return None
         return WeatherForecast(
             rain_probability=rain / 100, temperature_c=temp, fetched_at=datetime.now(timezone.utc),
+            start_temperature_c=_start_temperature(data, start_utc),
         )
     except (httpx.HTTPError, KeyError, ValueError, IndexError):
         return None

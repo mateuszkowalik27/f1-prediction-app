@@ -60,3 +60,49 @@ def test_wet_races_flags_by_threshold_and_skips_missing():
 
     races = [_race(2024, 8, date(2024, 5, 26)), _race(2023, 6, date(2023, 5, 28)), _race(2022, 7, date(2022, 5, 29))]
     assert wet_races(races, http=client(handler)) == {(2024, 8): False, (2023, 6): True}
+
+
+# --- temperatura w chwili startu (model v2) ---
+from datetime import datetime, timezone   # noqa: E402
+
+
+def hourly_handler(request):
+    assert "temperature_2m" in request.url.params.get("hourly", "")      # prosimy o dane godzinowe
+    return httpx.Response(200, json=json.loads((FIX / "openmeteo_forecast_hourly.json").read_text()))
+
+
+START = datetime(2026, 11, 21, 4, 0, tzinfo=timezone.utc)
+
+
+def test_start_temperature_taken_from_the_start_hour():
+    f = fetch_forecast(36.11, -115.17, date(2026, 11, 21), http=client(hourly_handler), today=TODAY, start_utc=START)
+    assert f.start_temperature_c == pytest.approx(13.6)                  # 04:00 UTC w prawdziwych danych
+    assert f.rain_probability >= 0                                      # reszta prognozy działa jak dotąd
+
+
+def test_start_temperature_none_without_start_time():
+    f = fetch_forecast(36.11, -115.17, date(2026, 11, 21), http=client(forecast_handler), today=TODAY)
+    assert f.start_temperature_c is None
+
+
+def test_forecast_still_works_when_hourly_missing():
+    f = fetch_forecast(36.11, -115.17, date(2026, 11, 21), http=client(forecast_handler), today=TODAY, start_utc=START)
+    assert f is not None and f.start_temperature_c is None               # odpowiedź bez sekcji godzinowej
+
+
+def test_start_hour_outside_returned_range_gives_none():
+    far = datetime(2026, 11, 25, 4, 0, tzinfo=timezone.utc)
+    f = fetch_forecast(36.11, -115.17, date(2026, 11, 21), http=client(hourly_handler), today=TODAY, start_utc=far)
+    assert f.start_temperature_c is None
+
+
+def test_hourly_request_never_asks_beyond_the_16_day_horizon():
+    seen = {}
+
+    def handler(request):
+        seen.update(dict(request.url.params))
+        return httpx.Response(200, json=json.loads((FIX / "openmeteo_forecast.json").read_text()))
+
+    race_day = date(2026, 11, 28)                        # dokładnie 16 dni od TODAY
+    fetch_forecast(36.11, -115.17, race_day, http=client(handler), today=TODAY, start_utc=datetime(2026, 11, 28, 4, tzinfo=timezone.utc))
+    assert date.fromisoformat(seen["end_date"]) <= date(2026, 11, 28)           # TODAY + 16

@@ -26,7 +26,9 @@ def _sequence(compounds: list[str], stops: int) -> list[str]:
 
 def predict_strategy(
     track: TrackStats, weather: WeatherForecast | None, tyre_history: TyreHistory | None,
+    deg_ratio: float | None = None,
 ) -> StrategyPrediction:
+    """deg_ratio: poziom zużycia opon na torze względem średniej (>= DEG_HIGH_RATIO = opony cierpią)."""
     stops = tyre_history.median_stops if tyre_history else config.DEFAULT_STOPS
     compounds = _main_compounds(tyre_history)
     rain = weather.rain_probability if weather else 0.0
@@ -44,6 +46,10 @@ def predict_strategy(
         confidence = "high"
     else:
         confidence = "medium"
+    if deg_ratio is not None and deg_ratio >= config.DEG_HIGH_RATIO:
+        alt_stops = stops + 1   # duże zużycie: realna alternatywa to dodatkowy postój (ma pierwszeństwo przed regułą safety car)
+        confidence = {"high": "medium", "medium": "low", "low": "low"}[confidence]
+        alternative = _sequence(compounds[::-1], alt_stops)
     return StrategyPrediction(
         primary=Strategy(stops=stops, compounds=primary),
         alternative=Strategy(stops=alt_stops, compounds=alternative),

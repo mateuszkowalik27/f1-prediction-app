@@ -17,6 +17,10 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "wet_skill": 0.05,
     "reliability": 0.10,
     "quali_gap": 0.10,
+    "pit_stop": 0.03,
+    "race_vs_quali": 0.0,   # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
+    "tyre_deg_fit": 0.0,    # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
+    "temp_fit": 0.0,        # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
 }
 # Dostrojone testem wstecznym na sezonie 2026 (rundy 1-20, siatka znana, 10 000 symulacji; próbka uczona = oceniana,
 # dlatego wybrano płaski fragment, a nie skrajny punkt). Błąd Briera zwycięzcy: 0,0361 -> 0,0246 (losowo: 0,0434);
@@ -37,10 +41,14 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "wet_skill": (0.01, 0.15),
     "reliability": (0.02, 0.25),
     "quali_gap": (0.02, 0.30),
+    "pit_stop": (0.0, 0.10),
+    "race_vs_quali": (0.0, 0.20),
+    "tyre_deg_fit": (0.0, 0.15),
+    "temp_fit": (0.0, 0.08),
     "grid_base_weight": (0.3, 1.6),
     "race_noise_base": (0.3, 1.5),
 }
-LOCKED_WEIGHTS: set[str] = set()   # wagi, których robot nie rusza
+LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit"}   # wagi, których robot nie rusza
 TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
 
 RECENCY_HALF_LIFE_YEARS = 3
@@ -105,3 +113,19 @@ QUALI_GAP_CLIP = 7.0      # strata w kwalifikacjach powyżej tylu % jest przycin
 
 # Bramka quali_gap (2026-11-12, poza próbką, Brier z czynnikiem / bez): 2024 0,03628/0,03677, 2025 0,03355/0,03277,
 #   2026 0,02649/0,02699; średnio 0,03210/0,03218 -> ZOSTAJE (lepszy w 2 z 3 sezonów), ale zysk jest bardzo mały (~0,25%).
+PIT_DELTA_CLIP = 2.0         # różnica czasu postoju zespołu względem stawki jest przycinana do +-2 s na wyścig
+RACEQ_SHRINK_K = 4           # ściąganie przewagi niedzielnej ku zeru: n/(n+K)
+RACE_PACE_CLIP = 5.0         # tempo wyścigowe względem stawki przycinane do +-5% (uszkodzone auto)
+# Bramka pit_stop (2026-11-12, poza próbką, Brier z czynnikiem / bez): 2024 0,03623/0,03628, 2025 0,03215/0,03355,
+#   2026 0,02549/0,02649; średnio 0,03129/0,03210 -> ZOSTAJE (lepszy we wszystkich 3 sezonach). Uwaga: szybkie postoje
+#   korelują z siłą zespołu, więc część efektu może być zastępnikiem siły bolidu, a nie samej szybkości załogi.
+TYRE_FIT_MIN_RACES = 6        # tyle agregatów ze zużyciem trzeba mieć, żeby tyre_deg_fit się włączył
+DEG_HIGH_RATIO = 1.25        # tor uznajemy za "wysokie zużycie", gdy jego poziom zużycia > 1,25 x średnia wszystkich torów
+# Bramka race_vs_quali (2026-11-12, poza próbką, Brier z czynnikiem / bez): 2024 0,03587/0,03609, 2025 0,03346/0,03222,
+#   2026 0,02624/0,02553; średnio 0,03186/0,03128 -> WYPADA (gorszy średnio i w 2 z 3 sezonów). Waga 0, LOCKED_WEIGHTS.
+# Bramka tyre_deg_fit (2026-11-12, poza próbką, Brier z czynnikiem / bez): 2024 0,03609/0,03623, 2025 0,03222/0,03215,
+#   2026 0,02553/0,02549; średnio 0,03128/0,03129 -> WYPADA (praktycznie remis, ale gorszy w 2 z 3 sezonów). Waga 0, LOCKED_WEIGHTS.
+#   Wpływ zużycia na strategię opon (predict_strategy deg_ratio) zostaje: to osobna funkcja, nie czynnik siły.
+# Bramka temp_fit (2026-11-12, poza próbką, Brier z czynnikiem / bez): 2024 0,03621/0,03623, 2025 0,03360/0,03215,
+#   2026 0,02540/0,02549; średnio 0,03173/0,03129 -> WYPADA (gorszy średnio, wyraźnie w 2025). Waga 0, LOCKED_WEIGHTS.
+#   Uwaga: w teście wstecznym prognozę zastępowała faktyczna temperatura powietrza z wyścigu (lekko optymistycznie).

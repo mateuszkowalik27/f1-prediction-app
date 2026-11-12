@@ -139,8 +139,9 @@ class FakeOpenF1:
         return None
 
 
-def forecast(lat, lon, day):
-    return WeatherForecast(rain_probability=0.1, temperature_c=20.0, fetched_at=NOW)
+def forecast(lat, lon, day, start_utc=None):
+    return WeatherForecast(rain_probability=0.1, temperature_c=20.0, fetched_at=NOW,
+                           start_temperature_c=15.0 if start_utc else None)
 
 
 def clients(**kw):

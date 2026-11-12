@@ -57,3 +57,29 @@ def test_low_sc_odds_alternative_has_more_stops():
 def test_works_without_weather():
     s = predict_strategy(make_track(), None, history())
     assert s.rain_risk == 0.0
+
+
+# --- wpływ zużycia opon (model v2) ---
+def test_high_deg_adds_a_stop_to_the_alternative_even_with_high_sc_odds():
+    s = predict_strategy(make_track(sc=config.SC_ALT_THRESHOLD + 0.1), weather(0.0), history(stops=2), deg_ratio=config.DEG_HIGH_RATIO + 0.1)
+    assert s.alternative.stops == 3                      # bez zużycia byłoby 1 (wysokie SC); zużycie ma pierwszeństwo
+
+
+def test_high_deg_lowers_confidence_one_step():
+    normal = predict_strategy(make_track(sc=0.2), weather(0.0), history(), deg_ratio=1.0)
+    high = predict_strategy(make_track(sc=0.2), weather(0.0), history(), deg_ratio=config.DEG_HIGH_RATIO)
+    assert normal.confidence == "high" and high.confidence == "medium"
+    low = predict_strategy(make_track(sc=0.2), weather(0.0), None, deg_ratio=config.DEG_HIGH_RATIO)
+    assert low.confidence == "low"                       # niżej niż "low" nie ma
+
+
+def test_moderate_or_unknown_deg_keeps_old_behaviour():
+    base = predict_strategy(make_track(sc=0.2), weather(0.0), history(stops=2))
+    assert predict_strategy(make_track(sc=0.2), weather(0.0), history(stops=2), deg_ratio=None) == base
+    assert predict_strategy(make_track(sc=0.2), weather(0.0), history(stops=2), deg_ratio=config.DEG_HIGH_RATIO - 0.1) == base
+
+
+def test_high_deg_never_changes_the_primary_strategy():
+    base = predict_strategy(make_track(sc=0.2), weather(0.0), history(stops=2))
+    high = predict_strategy(make_track(sc=0.2), weather(0.0), history(stops=2), deg_ratio=2.0)
+    assert high.primary == base.primary

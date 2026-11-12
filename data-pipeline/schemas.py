@@ -35,6 +35,7 @@ class WeatherForecast(BaseModel):
     rain_probability: float  # 0-1
     temperature_c: float
     fetched_at: datetime
+    start_temperature_c: float | None = None   # temperatura powietrza o godzinie startu wyścigu (prognoza godzinowa)
 
 
 class TrackProfile(BaseModel):

@@ -9,6 +9,10 @@ export const FACTOR_LABELS = {
   wet_skill: 'jazda w deszczu',
   reliability: 'niezawodność',
   quali_gap: 'różnica czasów w kwalifikacjach',
+  pit_stop: 'czas pit stopów',
+  race_vs_quali: 'tempo wyścigowe vs kwalifikacyjne',
+  tyre_deg_fit: 'zużycie opon',
+  temp_fit: 'temperatura',
   grid_base_weight: 'siła pozycji startowej',
   race_noise_base: 'poziom losowości',
 }

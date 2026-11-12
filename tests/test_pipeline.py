@@ -426,3 +426,18 @@ def test_calibration_is_not_applied_before_the_grid_is_known(tmp_path):
     run_pipeline(calibrated, 2027, NOW, clients())
     win = lambda out: [round(p.win, 9) for p in read(out, "weekend.json", WeekendResponse).payload.race_prediction]
     assert win(plain) == win(calibrated)                        # przed kwalifikacjami kalibracja nie działa
+
+
+def test_forecast_is_asked_for_the_race_start_hour_and_temperature_reaches_the_payload(tmp_path):
+    from fakes import forecast as fake_forecast
+    calls = []
+
+    def spy(lat, lon, day, start_utc=None):
+        calls.append(start_utc)
+        return fake_forecast(lat, lon, day, start_utc=start_utc)
+
+    c = clients()
+    c.forecast = spy
+    run_pipeline(tmp_path, 2027, NOW, c)
+    assert calls == [datetime(2027, 4, 11, 13, 0, tzinfo=UTC)]            # start wyścigu rundy 3
+    assert read(tmp_path, "weekend.json", WeekendResponse).payload.weather.start_temperature_c == 15.0

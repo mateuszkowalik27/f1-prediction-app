@@ -98,3 +98,11 @@ def test_predict_rounds_returns_predictions_with_actual_finish():
     assert len(out) == len(cases)
     rows, actual = out[0]
     assert abs(sum(r.win for r in rows) - 1.0) < 0.05 and actual and 1 in actual.values()   # w nielicznych symulacjach wszyscy odpadają
+
+
+def test_backtest_uses_the_races_own_air_temperature_as_a_stand_in_for_the_forecast():
+    aggs = [make_agg(2027, 1), make_agg(2027, 2, air_temp_c=21.0)]
+    cases = {c.round: c for c in prepare_rounds(2027, clients(), aggregates=aggs)}
+    assert cases[2].ctx.weather.start_temperature_c == 21.0
+    assert cases[2].ctx.weather.rain_probability == 0.0         # bez deszczu: nie włącza umiejętności deszczowej
+    assert cases[1].ctx.weather is None                         # runda bez temperatury w agregacie
