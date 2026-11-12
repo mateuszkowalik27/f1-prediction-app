@@ -285,3 +285,29 @@ def test_errors_counter_increments_for_each_failing_public_method():
     c = make_client({"/sessions": lambda q: (500, {})})
     c.race_laps(race(), ENTRIES); c.race_weather(race()); c.starting_grid(race(), ENTRIES)
     assert c.errors == 3
+
+
+def sprint_quali_routes(results):
+    return {
+        "/sessions": lambda q: (200, [sess(7, "Sprint Qualifying", "2024-05-24"), sess(9, "Race", "2024-05-26")]),
+        "/drivers": lambda q: (200, [{"driver_number": 16, "name_acronym": "LEC"},
+                                     {"driver_number": 1, "name_acronym": "VER"}]),
+        "/session_result": lambda q: (200, results),
+        "/laps": lambda q: (200, [lap(2, 16, 80.5), lap(2, 1, 81.0)]),
+    }
+
+
+def test_sprint_qualifying_is_split_into_parts_from_session_result():
+    results = [{"position": 1, "driver_number": 16, "duration": [93.0, 92.2, 91.5]},
+               {"position": 2, "driver_number": 1, "duration": [93.4, None, None]}]
+    tables = make_client(sprint_quali_routes(results)).best_laps(race(), ENTRIES)
+    sq = tables["SprintQualifying"]
+    assert sq.kind == "qualifying"
+    assert (sq.rows[0].driver_id, sq.rows[0].q1, sq.rows[0].q2, sq.rows[0].q3) == ("leclerc", 93.0, 92.2, 91.5)
+    assert (sq.rows[1].q2, sq.rows[1].q3) == (None, None)           # odpadł w SQ1
+
+
+def test_sprint_qualifying_falls_back_to_best_laps_without_session_result():
+    tables = make_client(sprint_quali_routes([])).best_laps(race(), ENTRIES)
+    sq = tables["SprintQualifying"]
+    assert sq.kind == "practice" and sq.rows[0].best_s == 80.5

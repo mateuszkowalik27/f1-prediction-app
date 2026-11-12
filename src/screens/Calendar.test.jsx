@@ -61,9 +61,9 @@ describe('Calendar screen', () => {
           { driver_id: 'russell', position: 2, q1: 80.9, q2: null, q3: null },
         ] },
         Race: { kind: 'race', rows: [
-          { driver_id: 'antonelli', position: 1, time: '1:30:00.123', status: 'Finished' },
-          { driver_id: 'russell', position: 2, time: '+5.123', status: 'Finished' },
-          { driver_id: 'leclerc', position: 3, time: null, status: 'Engine' },
+          { driver_id: 'antonelli', position: 1, time: '1:30:00.123', status: 'Finished', points: 25 },
+          { driver_id: 'russell', position: 2, time: '+5.123', status: 'Finished', points: 18 },
+          { driver_id: 'leclerc', position: 3, time: null, status: 'Engine', points: 0 },
         ] },
       },
     }
@@ -105,6 +105,9 @@ describe('Calendar screen', () => {
       expect(within(li).getByText('+5,123')).toBeInTheDocument()
       expect(within(li).getByText('DNF')).toBeInTheDocument()
       expect(within(li).getByText('Engine')).toBeInTheDocument()
+      expect(within(li).getByText('Pkt')).toBeInTheDocument()
+      expect(within(li).getByText('25')).toBeInTheDocument()
+      expect(within(li).getByText('18')).toBeInTheDocument()
     })
 
     it('keeps the plain schedule when there is no results file', async () => {

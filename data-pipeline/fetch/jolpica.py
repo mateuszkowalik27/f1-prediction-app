@@ -275,7 +275,8 @@ class JolpicaClient:
             return None
         return [
             SessionRow(driver_id=r["Driver"]["driverId"], position=int(r["position"]), time=(r.get("Time") or {}).get("time"),
-                       status=r.get("status"), laps=int(r["laps"]) if str(r.get("laps", "")).isdigit() else None)
+                       status=r.get("status"), laps=int(r["laps"]) if str(r.get("laps", "")).isdigit() else None,
+                       points=float(r["points"]) if r.get("points") is not None else None)
             for r in races[0][key]
         ]
 

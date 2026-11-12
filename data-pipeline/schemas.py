@@ -303,6 +303,7 @@ class SessionRow(BaseModel):
     time: str | None = None         # sprint/wyścig: czas zwycięzcy ("1:32:15.554") albo strata ("+7.152"), jak podaje Jolpica
     status: str | None = None       # sprint/wyścig: "Finished", "+1 Lap", "Retired" ...
     laps: int | None = None
+    points: float | None = None     # sprint/wyścig: zdobyte punkty
 
 
 class SessionTable(BaseModel):

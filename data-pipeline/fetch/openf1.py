@@ -274,6 +274,19 @@ class OpenF1Client:
             self.errors += 1
             return None
 
+    def _qualifying_table(self, key: int, num_to_id: dict) -> SessionTable | None:
+        """Kwalifikacje sprintu z podziałem na SQ1/SQ2/SQ3 (z /session_result: lista czasów części sesji)."""
+        rows = []
+        for r in self._get("/session_result", {"session_key": key}):
+            driver_id = num_to_id.get(r.get("driver_number"))
+            if not driver_id or not isinstance(r.get("duration"), list):
+                continue
+            q = [t if isinstance(t, (int, float)) and t else None for t in (r["duration"] + [None, None, None])[:3]]
+            rows.append(SessionRow(driver_id=driver_id, position=r.get("position"), q1=q[0], q2=q[1], q3=q[2]))
+        if not any(r.q1 for r in rows):
+            return None
+        return SessionTable(kind="qualifying", rows=sorted(rows, key=lambda r: (r.position is None, r.position)))
+
     # --- wyniki sesji: najlepsze okrążenia z treningów i sprint-kwalifikacji ---
     def best_laps(self, race: Race, entries: list[DriverEntry]) -> dict[str, SessionTable] | None:
         """Tabele (kierowca -> najlepsze okrążenie, od najszybszego) dla treningów i sprint-kwalifikacji weekendu.
@@ -291,6 +304,11 @@ class OpenF1Client:
                 key = s["session_key"]
                 num_to_id = {d["driver_number"]: code_to_id.get(d["name_acronym"])
                              for d in self._get("/drivers", {"session_key": key})}
+                if name == "SprintQualifying":
+                    table = self._qualifying_table(key, num_to_id)
+                    if table:
+                        out[name] = table
+                        continue                # a gdy brak podziału na części: spadamy do najlepszych okrążeń poniżej
                 best: dict[str, float] = {}
                 for lap in self._get("/laps", {"session_key": key}):
                     driver_id, duration = num_to_id.get(lap.get("driver_number")), lap.get("lap_duration")

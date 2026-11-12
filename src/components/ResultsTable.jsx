@@ -23,6 +23,7 @@ export default function ResultsTable({ table, nameById = {}, numberById = {} }) 
           {kind === 'practice' && <th className="num">Najlepszy czas</th>}
           {kind === 'qualifying' && ['Q1', 'Q2', 'Q3'].map((q) => <th className="num" key={q}>{q}</th>)}
           {kind === 'race' && <th className="num">Czas</th>}
+          {kind === 'race' && <th className="num">Pkt</th>}
         </tr>
       </thead>
       <tbody>
@@ -45,6 +46,7 @@ export default function ResultsTable({ table, nameById = {}, numberById = {} }) 
                   {result.reason && <span className="muted small block">{result.reason}</span>}
                 </td>
               )}
+              {kind === 'race' && <td className="num">{row.points ?? '–'}</td>}
             </tr>
           )
         })}

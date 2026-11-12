@@ -309,3 +309,19 @@ def test_pit_stops_parses_minute_durations():
 def test_pit_stops_empty_when_none():
     empty = {"MRData": {"total": "0", "RaceTable": {"Races": []}}}
     assert make_client({"/2026/21/pitstops.json": empty}).pit_stops(2026, 21) == []
+
+
+def test_race_table_has_winner_time_gaps_status_laps_and_points():
+    data = fixture("jolpica_monaco_2024.json")
+    c = make_client({"/2024/8/results.json": data})
+    rows = c.race_table(2024, 8)
+    assert rows[0].driver_id == "leclerc" and rows[0].time == "2:23:15.554" and rows[0].points == 25.0
+    assert rows[1].time == "+7.152" and rows[1].points == 18.0 and rows[1].laps == 78
+    assert rows[10].points == 0.0
+    assert rows[-1].status == "Retired" and rows[-1].time is None
+
+
+def test_race_table_none_when_there_are_no_results_yet():
+    data = fixture("jolpica_monaco_2024.json")
+    data["MRData"]["RaceTable"]["Races"] = []
+    assert make_client({"/2024/8/results.json": data}).race_table(2024, 8) is None
