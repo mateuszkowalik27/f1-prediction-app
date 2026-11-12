@@ -13,7 +13,7 @@ import config
 from calibration import Prediction, _brier, fit_tau
 from evaluation import predict_rounds, prepare_seasons
 from history_store import HistoryStore
-from oos import weights_for_season
+from oos import clients_with_wet_cache, weights_for_season
 from schemas import Calibration
 
 
@@ -26,8 +26,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     now = datetime.now(timezone.utc)
     season = resolve_season(now, default_clients(now.year).jolpica)
-    by_season = prepare_seasons(list(range(config.FIRST_BACKFILL_SEASON, season + 1)), default_clients(season),
+    clients, save_wet = clients_with_wet_cache(default_clients(season), args.out)
+    by_season = prepare_seasons(list(range(config.FIRST_BACKFILL_SEASON, season + 1)), clients,
                                 HistoryStore(args.out / "history").all())
+    save_wet()
     base, bounds, locked = config.default_weights(), config.WEIGHT_BOUNDS, set(config.LOCKED_WEIGHTS)
     predictions: list[Prediction] = []
     for s in (x for x in config.TEST_SEASONS if x in by_season):

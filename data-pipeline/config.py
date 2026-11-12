@@ -91,3 +91,8 @@ TEST_SEASONS = [2024, 2025, 2026]   # sezony oceniane poza próbką (2022-2023 s
 # Kalibracja szans (model v2)
 CAL_MIN_RACES = 60                                            # poniżej tylu przewidywań poza próbką nie korygujemy (tau = 1)
 CAL_TAU_GRID = [round(0.6 + 0.05 * i, 2) for i in range(21)]  # 0,60 ... 1,60
+
+# Punkt odniesienia modelu v2 (test poza próbką, domyślna liczba symulacji, bez nowych czynników), 2026-11-12:
+#   Brier szans na wygraną: 2024 = 0,0368, 2025 = 0,0328, 2026 = 0,0270 (losowanie ~0,043).
+#   Kalibracja: tau = 0,75 na 68 przewidywaniach poza próbką (0,03248 -> 0,03214): model lekko zbyt pewny siebie.
+#   Bramka każdego nowego czynnika porównuje się z tymi liczbami (python data-pipeline/oos.py --factor NAZWA).

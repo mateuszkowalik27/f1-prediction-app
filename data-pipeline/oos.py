@@ -84,6 +84,22 @@ def write_oos(path: Path, scores: dict[int, float]) -> None:
     path.write_text(json.dumps(rows, indent=2), encoding="utf-8")
 
 
+def clients_with_wet_cache(clients, out: Path):
+    """Klienci z cache'em mokrych wyścigów (jak w robocie), żeby nie odpytywać API pogody o setki wyścigów.
+    Zwraca (klienci, funkcja zapisująca cache)."""
+    from dataclasses import replace
+    from run import _cached_wet, _load_model
+    from schemas import WetCache
+
+    stored = _load_model(out / "wet_cache.json", WetCache)
+    flags = dict(stored.flags) if stored else {}
+
+    def save() -> None:
+        (out / "wet_cache.json").write_text(WetCache(flags=flags).model_dump_json(), encoding="utf-8")
+
+    return replace(clients, wet=_cached_wet(clients.wet, flags)), save
+
+
 def main(argv: list[str] | None = None) -> int:
     from run import default_clients, resolve_season  # import tutaj: run.py importuje moduły o podobnych zależnościach
 
@@ -94,8 +110,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     now = datetime.now(timezone.utc)
     season = resolve_season(now, default_clients(now.year).jolpica)
-    by_season = prepare_seasons(list(range(config.FIRST_BACKFILL_SEASON, season + 1)), default_clients(season),
+    clients, save_wet = clients_with_wet_cache(default_clients(season), args.out)
+    by_season = prepare_seasons(list(range(config.FIRST_BACKFILL_SEASON, season + 1)), clients,
                                 HistoryStore(args.out / "history").all())
+    save_wet()
     test_seasons = [s for s in config.TEST_SEASONS if s in by_season]
     base, bounds, locked = config.default_weights(), config.WEIGHT_BOUNDS, set(config.LOCKED_WEIGHTS)
     print(f"Sezony z wyścigami: {sorted(by_season)}; testowe: {test_seasons}")
