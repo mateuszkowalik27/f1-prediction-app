@@ -25,3 +25,15 @@ def make_ctx(entries=None, **overrides):
     base = dict(race=make_race(), entries=entries, track=make_track(), season=2027)
     base.update(overrides)
     return RaceContext(**base)
+
+
+def hist_race(season, rnd, rows, circuit_id="c", day=None):
+    """rows: (driver_id, team_id, finish|None) w kolejności startowej -> HistoricRace."""
+    from datetime import date
+    from schemas import HistoricRace, HistoricResult
+
+    results = [HistoricResult(driver_id=d, team_id=t, grid=i + 1, finish=f,
+                              status="Finished" if f else "Retired")
+               for i, (d, t, f) in enumerate(rows)]
+    return HistoricRace(season=season, round=rnd, circuit_id=circuit_id,
+                        date=day or date(season, 1 + rnd % 11, 1), lat=0.0, lon=0.0, results=results)

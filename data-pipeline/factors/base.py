@@ -75,3 +75,13 @@ def combine(ctx: RaceContext, factors: list[Factor], weights: dict[str, float]) 
         strength[entry.driver_id] = value
     return CombinedStrength(strength=strength, used=used, skipped=skipped,
                             low_data=len(used) < LOW_DATA_FACTOR_COUNT)
+
+
+def race_points(finish: int | None) -> int:
+    """Punkty za miejsce (bez sprintu i najszybszego okrążenia); brak klasyfikacji = 0."""
+    import config
+    return config.POINTS_TABLE[finish - 1] if finish and finish <= len(config.POINTS_TABLE) else 0
+
+
+def chronological(history: list[HistoricRace]) -> list[HistoricRace]:
+    return sorted(history, key=lambda r: (r.season, r.round))

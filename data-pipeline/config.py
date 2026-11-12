@@ -60,3 +60,9 @@ POINTS_TABLE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]
 TRACK_OVERRIDES: dict[str, TrackOverride] = {}
 TRACK_PROFILE_OVERRIDES: dict[str, TrackProfile] = {}
 WET_SKILL_OVERRIDES: dict[str, float] = {}
+
+# Czynniki oparte na wynikach
+FORM_HALF_LIFE_ROUNDS = 8   # co ile rund wynik traci połowę wagi (siła bolidu)
+FORM_RACES = 5              # ile ostatnich rund liczy się do formy kierowcy
+DNF_PRIOR_STRENGTH = 5      # jak mocno ściągamy wskaźnik awarii ku średniej przy małej próbie
+DEFAULT_DNF_RATE = 0.08     # gdy nie ma jeszcze żadnych wyników
