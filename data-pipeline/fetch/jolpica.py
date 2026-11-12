@@ -11,7 +11,8 @@ from pathlib import Path
 import httpx
 
 from schemas import (
-    Calendar, DriverEntry, HistoricRace, HistoricResult, Race, Session, StandingRow, Standings,
+    Calendar, DriverEntry, HistoricRace, HistoricResult, PitStop, QualiTimes, Race, Session, StandingRow,
+    Standings,
 )
 
 BASE_URL = "https://api.jolpi.ca/ergast/f1"
@@ -34,6 +35,19 @@ class JolpicaError(RuntimeError):
 
 class NoResultsError(LookupError):
     """Wyścig jeszcze się nie odbył (albo został odwołany): brak wyników."""
+
+
+def _seconds(text: str | None) -> float | None:
+    """"1:30.939" -> 90.939, "24.394" -> 24.394; pusty tekst albo brak -> None."""
+    if not text:
+        return None
+    try:
+        if ":" in text:
+            minutes, rest = text.split(":", 1)
+            return int(minutes) * 60 + float(rest)
+        return float(text)
+    except ValueError:
+        return None
 
 
 def _utc(date_str: str, time_str: str | None) -> datetime | None:
@@ -226,6 +240,31 @@ class JolpicaClient:
     def qualifying_grid(self, season: int, round: int) -> dict[str, int] | None:
         result = self.qualifying_result(season, round)
         return result[0] if result else None
+
+    def qualifying_times(self, season: int, round: int) -> list[QualiTimes] | None:
+        """Czasy Q1/Q2/Q3 (sekundy) każdego kierowcy albo None, gdy kwalifikacji jeszcze nie było."""
+        data = self._get(f"/{season}/{round}/qualifying.json", {"limit": PAGE_LIMIT})
+        races = data["RaceTable"]["Races"]
+        if not races or not races[0].get("QualifyingResults"):
+            return None
+        return [
+            QualiTimes(driver_id=r["Driver"]["driverId"], q1=_seconds(r.get("Q1")), q2=_seconds(r.get("Q2")),
+                       q3=_seconds(r.get("Q3")))
+            for r in races[0]["QualifyingResults"]
+        ]
+
+    def pit_stops(self, season: int, round: int) -> list[PitStop]:
+        """Wszystkie pit stopy wyścigu (czas przejazdu przez aleję) albo pusta lista."""
+        data = self._get(f"/{season}/{round}/pitstops.json", {"limit": PAGE_LIMIT})
+        races = data["RaceTable"]["Races"]
+        if not races:
+            return []
+        stops = []
+        for p in races[0].get("PitStops", []):
+            duration = _seconds(p.get("duration"))
+            if duration is not None:
+                stops.append(PitStop(driver_id=p["driverId"], lap=int(p["lap"]), duration_s=duration))
+        return stops
 
     def season_results(self, season: int, up_to_round: int) -> list[HistoricRace]:
         races = [self._to_historic(r) for r in self._all_races(f"/{season}/results.json")]

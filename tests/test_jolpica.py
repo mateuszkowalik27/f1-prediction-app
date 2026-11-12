@@ -247,3 +247,65 @@ def test_qualifying_result_gives_real_lineup_with_teams():
     assert grid["norris"] == 1
     by_id = {e.driver_id: e for e in entries}
     assert by_id["norris"].team_id == "mclaren" and len(entries) == len(grid)
+
+
+# --- czasy kwalifikacji i pit stopy (model v2) ---
+def quali_client(mutate=None):
+    data = fixture("jolpica_qualifying_2026_r20.json")
+    if mutate:
+        mutate(data["MRData"]["RaceTable"]["Races"][0]["QualifyingResults"])
+    return make_client({"/2026/20/qualifying.json": data})
+
+
+def test_qualifying_times_parses_minutes_and_seconds():
+    times = {t.driver_id: t for t in quali_client().qualifying_times(2026, 20)}
+    assert (times["norris"].q1, times["norris"].q2, times["norris"].q3) == (
+        pytest.approx(90.939), pytest.approx(89.207), pytest.approx(87.470))
+
+
+def test_driver_eliminated_in_q1_has_no_q2_q3():
+    t = {x.driver_id: x for x in quali_client().qualifying_times(2026, 20)}["bortoleto"]
+    assert t.q1 == pytest.approx(101.564) and t.q2 is None and t.q3 is None
+
+
+def test_driver_eliminated_in_q2_has_no_q3():
+    t = {x.driver_id: x for x in quali_client().qualifying_times(2026, 20)}["rafael_camara"]
+    assert t.q2 == pytest.approx(91.515) and t.q3 is None
+
+
+def test_empty_string_time_is_none():
+    def blank(rows):
+        rows[0]["Q2"] = ""
+
+    t = {x.driver_id: x for x in quali_client(blank).qualifying_times(2026, 20)}["norris"]
+    assert t.q2 is None and t.q3 is not None
+
+
+def test_qualifying_times_none_when_not_held():
+    empty = {"MRData": {"total": "0", "RaceTable": {"Races": []}}}
+    assert make_client({"/2026/21/qualifying.json": empty}).qualifying_times(2026, 21) is None
+
+
+def pit_client(mutate=None):
+    data = fixture("jolpica_pitstops_2026_r20.json")
+    if mutate:
+        mutate(data["MRData"]["RaceTable"]["Races"][0]["PitStops"])
+    return make_client({"/2026/20/pitstops.json": data})
+
+
+def test_pit_stops_parsed_with_durations():
+    stops = pit_client().pit_stops(2026, 20)
+    assert len(stops) == 58
+    assert (stops[0].driver_id, stops[0].lap, stops[0].duration_s) == ("hamilton", 14, pytest.approx(24.394))
+
+
+def test_pit_stops_parses_minute_durations():
+    def long_stop(rows):
+        rows[0]["duration"] = "1:02.345"
+
+    assert pit_client(long_stop).pit_stops(2026, 20)[0].duration_s == pytest.approx(62.345)
+
+
+def test_pit_stops_empty_when_none():
+    empty = {"MRData": {"total": "0", "RaceTable": {"Races": []}}}
+    assert make_client({"/2026/21/pitstops.json": empty}).pit_stops(2026, 21) == []
