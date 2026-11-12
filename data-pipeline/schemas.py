@@ -1,7 +1,7 @@
 """Kształty danych używane w całym projekcie (pydantic). Te same kształty trafiają do plików JSON."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, model_validator
@@ -55,6 +55,24 @@ class TrackProfile(BaseModel):
 class TrackOverride(BaseModel):
     overtaking_difficulty: float | None = None
     sc_probability: float | None = None
+
+
+class HistoricResult(BaseModel):
+    driver_id: str
+    team_id: str
+    grid: int
+    finish: int | None  # None = nie sklasyfikowany (DNF, DSQ, DNS)
+    status: str
+
+
+class HistoricRace(BaseModel):
+    season: int
+    round: int
+    circuit_id: str
+    date: date
+    lat: float
+    lon: float
+    results: list[HistoricResult]
 
 
 class DriverProbability(BaseModel):
