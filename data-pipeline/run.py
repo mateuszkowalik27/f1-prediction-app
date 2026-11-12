@@ -25,6 +25,7 @@ from evaluation import RoundCase, evaluate, prepare_rounds, score_rounds
 from fetch.jolpica import JolpicaClient, JolpicaError
 from fetch.openf1 import OpenF1Client
 from fetch.openmeteo import fetch_forecast, wet_races
+from optional import optional as _optional
 from schemas import (
     Calendar, DriverEntry, DriverProbability, FrozenPrediction, HistoricRace, Meta, ModelPayload, ProfileCache, Race,
     SafetyCarOdds, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse, WetCache,
@@ -97,15 +98,6 @@ def actual_qualifying(race: Race, now_utc: datetime, jolpica) -> tuple[dict[str,
         return jolpica.qualifying_result(race.season, race.round)
     except JolpicaError:
         return None
-
-
-def _optional(label: str, fn, *args):
-    """Opcjonalne źródło (pogoda, OpenF1): każdy błąd tylko je wyłącza, nie przerywa aktualizacji. -> (wynik, błąd?)"""
-    try:
-        return fn(*args), False
-    except Exception as exc:  # noqa: BLE001 — świadomie szeroko: zepsuta odpowiedź obcego API nie może zabić przebiegu
-        print(f"UWAGA: {label} nie zadziałało ({type(exc).__name__}: {exc}); pomijam to źródło.", file=sys.stderr)
-        return None, True
 
 
 def _actual_quali_rows(grid: dict[str, int], drivers: list[str]) -> list[DriverProbability]:

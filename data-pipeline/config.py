@@ -81,3 +81,8 @@ FUEL_EFFECT_S_PER_LAP = 0.035   # o tyle szybsze jest auto z każdym okrążenie
 MIN_STINT_LAPS = 8              # krótszych stintów nie używamy do zużycia opon
 RACE_PACE_MIN_LAPS = 5          # tyle czystych okrążeń trzeba mieć, żeby liczyć tempo wyścigowe kierowcy
 SLOW_LAP_RATIO = 1.07           # okrążenia wolniejsze niż 107% mediany (safety car, żółte flagi) odrzucamy
+
+# Historia agregatów (model v2)
+BACKFILL_RACES_PER_RUN = 6      # ile wyścigów najwyżej uzupełniamy na jedno uruchomienie robota (limity API)
+FIRST_BACKFILL_SEASON = 2022    # od którego sezonu zbieramy historię
+OPENF1_FIRST_SEASON = 2023      # OpenF1 ma dane dopiero od tego sezonu

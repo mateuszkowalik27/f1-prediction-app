@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fetch.jolpica import JolpicaError
 from helpers import hist_race, make_entries
 from run import Clients
-from schemas import Race, Session, StandingRow, Standings, WeatherForecast
+from schemas import PitStop, QualiTimes, Race, Session, StandingRow, Standings, WeatherForecast
 
 UTC = timezone.utc
 
@@ -26,12 +26,14 @@ CALENDAR = [mk_race(1, 3, 14), mk_race(2, 3, 28), mk_race(3, 4, 11)]
 
 class FakeJolpica:
     def __init__(self, fail=False, grid=None, with_history=True, empty_round=None, extra_entry=False,
-                 completed=2, entries_current=True, empty_standings=False, fail_results=False, quali_entries=None):
+                 completed=2, entries_current=True, empty_standings=False, fail_results=False, quali_entries=None,
+                 fail_quali_times=False):
         self.fail, self.grid, self.with_history, self.empty_round = fail, grid, with_history, empty_round
         self.extra_entry = extra_entry
         self.completed = completed
         self.entries_current, self.empty_standings = entries_current, empty_standings
         self.fail_results, self.quali_entries = fail_results, quali_entries
+        self.fail_quali_times = fail_quali_times
 
     def calendar(self, season):
         if self.fail:
@@ -73,6 +75,16 @@ class FakeJolpica:
     def qualifying_grid(self, season, round):
         return self.grid
 
+    def qualifying_times(self, season, round):
+        if self.fail_quali_times:
+            raise JolpicaError("awaria czasów kwalifikacji")
+        return [QualiTimes(driver_id="d1", q1=80.0, q2=79.0, q3=78.0), QualiTimes(driver_id="d2", q1=80.4, q2=79.5, q3=78.6),
+                QualiTimes(driver_id="d3", q1=80.8, q2=79.9), QualiTimes(driver_id="d4", q1=81.5)]
+
+    def pit_stops(self, season, round):
+        return [PitStop(driver_id=d, lap=10 + i, duration_s=s)
+                for i, (d, s) in enumerate([("d1", 23.0), ("d2", 23.4), ("d3", 25.0), ("d4", 25.4)])]
+
     def qualifying_result(self, season, round):
         if not self.grid:
             return None
@@ -81,10 +93,30 @@ class FakeJolpica:
 
 
 class FakeOpenF1:
-    def __init__(self, practice=None, broken=False):
+    def __init__(self, practice=None, broken=False, laps=None, weather=None, grid=None):
         self.practice = practice
         self.broken = broken
+        self.laps, self.weather, self.grid = laps, weather, grid
         self.trace_requests = []
+        self.calls = []                       # nazwy wywołanych nowych metod (model v2)
+
+    def race_laps(self, race, entries):
+        self.calls.append("race_laps")
+        if self.broken:
+            raise KeyError("lap_duration")
+        return self.laps
+
+    def race_weather(self, race):
+        self.calls.append("race_weather")
+        if self.broken:
+            raise KeyError("air_temperature")
+        return self.weather
+
+    def starting_grid(self, race, entries):
+        self.calls.append("starting_grid")
+        if self.broken:
+            raise KeyError("position")
+        return self.grid
 
     def practice_pace(self, race, entries):
         if self.broken:
