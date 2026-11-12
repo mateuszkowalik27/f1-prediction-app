@@ -1,6 +1,7 @@
-import { pct, prettifyId } from '../lib/labels.js'
+import { pct } from '../lib/labels.js'
+import DriverCell from './DriverCell.jsx'
 
-export default function ProbabilityTable({ rows, nameById, numberById = {}, mode }) {
+export default function ProbabilityTable({ rows, drivers, mode }) {
   const race = mode === 'race'
   const sorted = [...rows].sort((a, b) => b.win - a.win)
   const max = sorted[0]?.win || 1
@@ -17,10 +18,7 @@ export default function ProbabilityTable({ rows, nameById, numberById = {}, mode
         {sorted.map((row) => (
           <tr key={row.driver_id}>
             <td>
-              {numberById[row.driver_id] != null && (
-                <span className="car-no" title="Numer startowy">{numberById[row.driver_id]}</span>
-              )}
-              {nameById[row.driver_id] ?? prettifyId(row.driver_id)}
+              <DriverCell id={row.driver_id} drivers={drivers} />
             </td>
             <td>
               <span>{pct(row.win)}</span>

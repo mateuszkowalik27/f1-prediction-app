@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import ProbabilityTable from '../components/ProbabilityTable.jsx'
-import SessionList from '../components/SessionList.jsx'
+import DriverCell from '../components/DriverCell.jsx'
+import RoundSessions from '../components/RoundSessions.jsx'
 import { LoadError, Loading } from '../components/Status.jsx'
 import StrategyCard from '../components/StrategyCard.jsx'
 import WeatherCard from '../components/WeatherCard.jsx'
 import { useData } from '../lib/data.js'
-import { factorLabel, prettifyId } from '../lib/labels.js'
+import { driverMaps } from '../lib/drivers.js'
+import { factorLabel } from '../lib/labels.js'
 
 export default function Weekend() {
   const weekend = useData('weekend.json')
@@ -32,8 +34,7 @@ export default function Weekend() {
     race, weather, strategy, safety_car, qualifying, race_prediction, factors_skipped, low_data,
     lineup, penalties = [],
   } = weekend.data.payload
-  const nameById = Object.fromEntries((standings.data?.drivers ?? []).map((d) => [d.id, d.name]))
-  const numberById = Object.fromEntries((standings.data?.drivers ?? []).map((d) => [d.id, d.number]))
+  const drivers = driverMaps(standings.data)
   const skipped = factors_skipped.map(factorLabel).join(', ')
 
   return (
@@ -58,7 +59,7 @@ export default function Weekend() {
 
       <section className="card">
         <h3>Harmonogram (czas polski)</h3>
-        <SessionList sessions={race.sessions} />
+        <RoundSessions race={race} />
       </section>
       <WeatherCard weather={weather} />
       <StrategyCard strategy={strategy} safetyCar={safety_car} />
@@ -73,12 +74,7 @@ export default function Weekend() {
             Wyścig
           </button>
         </div>
-        <ProbabilityTable
-          rows={mode === 'race' ? race_prediction : qualifying}
-          nameById={nameById}
-          numberById={numberById}
-          mode={mode}
-        />
+        <ProbabilityTable rows={mode === 'race' ? race_prediction : qualifying} drivers={drivers} mode={mode} />
         {!low_data && skipped && <p className="muted small">{`Pominięte czynniki (brak danych): ${skipped}.`}</p>}
       </section>
 
@@ -88,8 +84,10 @@ export default function Weekend() {
           <ul className="list">
             {penalties.map((p) => (
               <li key={p.driver_id}>
-                {numberById[p.driver_id] != null && <span className="car-no">{numberById[p.driver_id]}</span>}
-                {`${nameById[p.driver_id] ?? prettifyId(p.driver_id)} z ${p.from_pos}. na ${p.to_pos}.`}
+                <div className="session-row">
+                  <DriverCell id={p.driver_id} drivers={drivers} />
+                  <span>{`z ${p.from_pos}. na ${p.to_pos}.`}</span>
+                </div>
               </li>
             ))}
           </ul>

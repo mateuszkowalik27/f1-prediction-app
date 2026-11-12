@@ -1,39 +1,8 @@
 import { formatGap, formatLap, formatRaceResult } from '../lib/format.js'
-import { prettifyId } from '../lib/labels.js'
-import { shortName, teamColors, teamLogo } from '../lib/teams.js'
-
-// Skrót kierowcy: oficjalny trzyliterowy kod (ANT, HAM), a bez niego trzy pierwsze litery nazwiska.
-export const driverCode = (id, codeById, nameById) =>
-  codeById[id] ?? (nameById[id] ?? prettifyId(id)).split(' ').pop().slice(0, 3).toUpperCase()
-
-// Komórka kierowcy: numer w barwach zespołu, białe logo zespołu, "A. Nazwisko", a niżej szary skrót (ANT).
-const Name = ({ id, nameById, numberById, codeById, teamById }) => {
-  const full = nameById[id] ?? prettifyId(id)
-  const team = teamById[id]
-  const colors = teamColors(team)
-  const logo = teamLogo(team)
-  return (
-    <span className="driver">
-      {numberById[id] != null && (
-        <span
-          className="car-no"
-          title="Numer startowy"
-          style={colors ? { background: colors.bg, color: colors.fg } : undefined}
-        >
-          {numberById[id]}
-        </span>
-      )}
-      {logo ? <img className="team-logo" src={logo} alt="" /> : <span className="team-logo" />}
-      <span className="driver-names" title={full}>
-        <span className="driver-name">{shortName(full)}</span>
-        <span className="driver-code">{driverCode(id, codeById, nameById)}</span>
-      </span>
-    </span>
-  )
-}
+import DriverCell from './DriverCell.jsx'
 
 // Tabela wyników jednej sesji. `table.kind`: practice | qualifying | race.
-export default function ResultsTable({ table, nameById = {}, numberById = {}, codeById = {}, teamById = {} }) {
+export default function ResultsTable({ table, drivers }) {
   const { kind, rows } = table
   // najlepszy czas w każdej części kwalifikacji: do niego liczymy stratę
   const best = ['q1', 'q2', 'q3'].map((q) => Math.min(...rows.map((r) => r[q]).filter((t) => t != null)))
@@ -56,7 +25,7 @@ export default function ResultsTable({ table, nameById = {}, numberById = {}, co
           return (
             <tr key={row.driver_id}>
               <td className="num">{row.position ?? i + 1}</td>
-              <td><Name id={row.driver_id} nameById={nameById} numberById={numberById} codeById={codeById} teamById={teamById} /></td>
+              <td><DriverCell id={row.driver_id} drivers={drivers} /></td>
               {kind === 'practice' && <td className="num">{formatLap(row.best_s)}</td>}
               {kind === 'qualifying' && [row.q1, row.q2, row.q3].map((t, n) => (
                 <td className="num" key={n}>

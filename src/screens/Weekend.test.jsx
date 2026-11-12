@@ -79,7 +79,7 @@ describe('Weekend screen', () => {
     await screen.findByText('Trening 1')
     const rows = screen.getAllByRole('row').slice(1) // bez nagłówka
     expect(rows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
-      '16Charles Leclerc', 'Andrea Kimi Antonelli', 'George Russell', '1Lando Norris',   // numer startowy w osobnej plakietce
+      '16C. LeclercLEC', 'A. AntonelliANT', 'G. RussellRUS', '1L. NorrisNOR',   // numer w plakietce, "A. Nazwisko", skrót
     ])
     expect(rows[1]).toHaveTextContent('28%')
     expect(rows[3]).toHaveTextContent('<1%') // 0,4% to nie 0%
@@ -93,7 +93,7 @@ describe('Weekend screen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Kwalifikacje' }))
     expect(screen.getByRole('button', { name: 'Kwalifikacje' })).toHaveAttribute('aria-pressed', 'true')
     const first = screen.getAllByRole('row')[1]
-    expect(within(first).getAllByRole('cell')[0]).toHaveTextContent('Lando Norris')
+    expect(within(first).getAllByRole('cell')[0]).toHaveTextContent('L. Norris')
     expect(screen.getByRole('columnheader', { name: 'Pole position' })).toBeInTheDocument()
   })
 
@@ -117,13 +117,16 @@ describe('Weekend screen', () => {
     }))
     render(<Weekend />)
     expect(await screen.findByText('Kary na starcie')).toBeInTheDocument()
-    expect(screen.getByText('Charles Leclerc z 3. na 13.')).toBeInTheDocument()
+    const row = screen.getByText('z 3. na 13.').closest('li')
+    expect(row).toHaveTextContent('C. Leclerc')
+    expect(row).toHaveTextContent('LEC')
   })
 
   it('falls back to a readable name for a driver missing from the standings', async () => {
     mockData(withPayload((p) => { p.penalties = [{ driver_id: 'max_verstappen', from_pos: 1, to_pos: 11 }] }))
     render(<Weekend />)
-    expect(await screen.findByText('Max Verstappen z 1. na 11.')).toBeInTheDocument()
+    const row = (await screen.findByText('z 1. na 11.')).closest('li')
+    expect(row).toHaveTextContent('M. Verstappen')   // brak w klasyfikacji: nazwa z id
   })
 
   it('shows the car number as a separate badge next to the driver, and no track-data card', async () => {
@@ -133,6 +136,20 @@ describe('Weekend screen', () => {
     expect(screen.getAllByTitle('Numer startowy').length).toBeGreaterThan(0)
     expect(screen.getAllByText('16').length).toBeGreaterThan(0)
     expect(screen.queryByText('Dane o torze')).not.toBeInTheDocument()
+  })
+
+  it('offers session results in the schedule section once the robot has saved them', async () => {
+    const results = {
+      season: 2026, round: 21, generated_at: '2026-11-20T12:00:00Z',
+      sessions: { FP1: { kind: 'practice', rows: [{ driver_id: 'antonelli', position: 1, best_s: 79.5 }] } },
+    }
+    mockData({ 'results/2026-21.json': results })
+    render(<Weekend />)
+    const li = (await screen.findByText('Trening 1')).closest('li')
+    fireEvent.click(await within(li).findByRole('button', { name: 'Wyniki' }))
+    expect(within(li).getByText('1:19,500')).toBeInTheDocument()
+    expect(within(li).getByText('A. Antonelli')).toBeInTheDocument()
+    expect(within(screen.getByText('Trening 2').closest('li')).queryByRole('button', { name: 'Wyniki' })).toBeNull()
   })
 
   it('shows no penalty card when there are no penalties', async () => {

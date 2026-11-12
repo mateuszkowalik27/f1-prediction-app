@@ -118,5 +118,5 @@ table.results .car-no { margin-right: 0; }
 .driver { display: inline-flex; align-items: center; gap: 7px; }
 .team-logo { width: 24px; height: 16px; object-fit: contain; flex: none; filter: brightness(0) invert(var(--logo-invert, 1)); }
 .driver-names { display: flex; flex-direction: column; line-height: 1.15; }
-.driver-name { font-size: 0.95rem; font-weight: 500; }
+.driver-name { font-size: 0.95rem; font-weight: 500; white-space: nowrap; }
 .driver-code { font-size: 0.68rem; font-weight: 400; color: var(--muted); letter-spacing: 0.04em; opacity: 0.85; }
