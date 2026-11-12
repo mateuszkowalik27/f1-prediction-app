@@ -127,9 +127,9 @@ dotyka. Tabele na wąskim ekranie przewijają się w bok.
 ### Logo zespołów
 
 W tabelach wyników przy kierowcy jest logo jego zespołu (białe w ciemnym motywie, ciemne w jasnym) i numer w barwach
-zespołu. Pliki leżą w `src/assets/teams/<constructorId>.svg`. Źródła: McLaren, Red Bull, Ferrari, Aston Martin, Audi
+zespołu. Pliki leżą w `src/assets/teams/<constructorId>.svg`. Źródła: McLaren, Ferrari, Aston Martin, Audi
 i Cadillac z biblioteki simple-icons (CC0); Mercedes, Alpine, Haas i Williams z Wikimedia Commons, a Racing Bulls
-z plików Wikipedii (przycięte do samego znaku zmianą `viewBox`). To znaki towarowe zespołów, użyte tylko informacyjnie.
+i Red Bull (dwa byki ze słońcem, z grafiki na Wikipedii, słońce z obwódką wokół byków) z plików Wikipedii (przycięte do samego znaku zmianą `viewBox`). To znaki towarowe zespołów, użyte tylko informacyjnie.
 Nowy zespół: dodaj SVG pod jego `constructorId` z Jolpica i kolor w `src/lib/teams.js`.
 
 ## Ograniczenia, o których warto wiedzieć
