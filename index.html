@@ -10,6 +10,23 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Gdy aplikacja w ogóle się nie uruchomi (np. nie załaduje się plik skryptu), pokazujemy treść błędu zamiast białego ekranu.
+      window.addEventListener('error', function (e) {
+        var root = document.getElementById('root')
+        if (!root || root.childNodes.length) return
+        var msg = (e && e.message) || (e && e.target && e.target.src ? 'Nie załadował się plik: ' + e.target.src : 'Nieznany błąd')
+        root.innerHTML = '<div style="font:16px system-ui,sans-serif;padding:20px;color:#888"><h2 style="margin:0 0 8px">Coś poszło nie tak</h2><p></p><button style="font:inherit;padding:8px 14px">Wyczyść i odśwież</button></div>'
+        root.querySelector('p').textContent = msg
+        root.querySelector('button').onclick = function () {
+          var done = function () { location.reload() }
+          Promise.resolve(navigator.serviceWorker && navigator.serviceWorker.getRegistrations())
+            .then(function (rs) { return Promise.all((rs || []).map(function (r) { return r.unregister() })) })
+            .then(function () { return window.caches ? caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k) })) }) : null })
+            .then(done, done)
+        }
+      }, true)
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
