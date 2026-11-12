@@ -21,7 +21,7 @@ from factors.registry import ALL_FACTORS
 from factors.reliability import dnf_rates
 from factors.track_profile import get_profile, load_estimates
 from factors.track_stats import compute_track_stats, default_track_stats
-from evaluation import evaluate_season
+from evaluation import RoundCase, prepare_rounds, score_rounds
 from fetch.jolpica import JolpicaClient, JolpicaError
 from fetch.openf1 import OpenF1Client
 from fetch.openmeteo import fetch_forecast, wet_races
@@ -33,6 +33,8 @@ from schemas import (
 from simulate.qualifying import predict_qualifying
 from simulate.race import apply_early_season, simulate_race
 from simulate.strategy import predict_strategy
+from statistics import mean
+from tuning import MIN_ROUNDS, append_snapshot, tune_weights
 
 RACE_DURATION = timedelta(hours=3)
 QUALIFYING_DURATION = timedelta(hours=2)
@@ -204,6 +206,31 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     return payload, sources, new_cache
 
 
+def _prepare_cases(season: int, clients: Clients, calendar: list[Race]) -> list[RoundCase]:
+    """Zakończone rundy do oceny i strojenia; awaria źródła nie może zablokować reszty pipeline'u."""
+    try:
+        return prepare_rounds(season, clients, calendar)
+    except (JolpicaError, LookupError):
+        return []
+
+
+def _tuned_weights(out_dir: Path, cases: list[RoundCase]) -> WeightsFile:
+    """Wagi z weights.json; po każdej nowej rundzie (od MIN_ROUNDS) dostrajane od nowa z wartości z configu."""
+    stored = _load_weights(out_dir)
+    if len(cases) < MIN_ROUNDS:
+        return stored
+    last_round = cases[-1].round
+    if stored.history and stored.history[-1].round == last_round:
+        return stored
+    # czynnik bez żadnych danych w teście wstecznym (pogoda, treningi) nie ma na co wpływać: nie stroimy go
+    untestable = {name for name in config.FACTOR_WEIGHTS if all(c.factor_scores.get(name) is None for c in cases)}
+    tuned = tune_weights(
+        config.default_weights(), config.WEIGHT_BOUNDS, set(config.LOCKED_WEIGHTS) | untestable, len(cases),
+        lambda w: mean(e.brier_win for e in score_rounds(cases, w, config.N_SIMULATIONS_TUNING)),
+    )
+    return append_snapshot(stored, tuned, last_round)
+
+
 def _cached_wet(wet_fn, flags: dict[str, bool]):
     """Opakowuje wykrywanie mokrych wyścigów: odpytuje API tylko o wyścigi, których jeszcze nie znamy."""
     def wet(races: list[HistoricRace]) -> dict[tuple[int, int], bool]:
@@ -222,7 +249,8 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
     clients = replace(clients, wet=_cached_wet(clients.wet, wet_flags))
     calendar = clients.jolpica.calendar(season)       # awaria Jolpica kończy się tu, zanim cokolwiek zapiszemy
     standings = clients.jolpica.standings(season)
-    weights_file = _load_weights(out_dir)
+    cases = _prepare_cases(season, clients, calendar)
+    weights_file = _tuned_weights(out_dir, cases)
     cache = _load_model(out_dir / "track_profiles.json", ProfileCache)
     profile_cache = cache.profiles if cache else {}
 
@@ -238,7 +266,7 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
         used, skipped = payload.factors_used, payload.factors_skipped
 
     meta = Meta(generated_at=now_utc, season=season, data_sources=sources)
-    evaluation = evaluate_season(season, clients, weights_file.weights)
+    evaluation = score_rounds(cases, weights_file.weights, config.N_SIMULATIONS_TUNING) if cases else []
     model = ModelPayload(weights=weights_file.weights, weight_history=weights_file.history,
                          factors_used=used, factors_skipped=skipped, evaluation=evaluation)
 
@@ -249,6 +277,8 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
     _write(out_dir / "model.json", model)
     if new_cache != profile_cache:
         _write(out_dir / "track_profiles.json", ProfileCache(profiles=new_cache))
+    if weights_file != _load_model(out_dir / "weights.json", WeightsFile) and weights_file.history:
+        _write(out_dir / "weights.json", weights_file)
     if wet_stored is None or wet_flags != wet_stored.flags:
         _write(out_dir / "wet_cache.json", WetCache(flags=wet_flags))
     _write(out_dir / "meta.json", meta)

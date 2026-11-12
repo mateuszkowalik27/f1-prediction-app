@@ -142,3 +142,36 @@ def test_wet_flags_are_cached_between_runs(tmp_path):
     seen.clear()
     run_pipeline(tmp_path, 2027, NOW, c)
     assert first > 0 and sum(seen) == 0          # za drugim razem wszystko z pliku wet_cache.json
+
+
+def test_weights_retuned_once_per_new_round(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=3))
+    stored = read(tmp_path, "weights.json", WeightsFile)
+    assert [s.round for s in stored.history] == [3]
+    assert all(lo <= stored.weights[k] <= hi for k, (lo, hi) in config.WEIGHT_BOUNDS.items())
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=3))             # ta sama runda: bez ponownego strojenia
+    again = read(tmp_path, "weights.json", WeightsFile)
+    assert [s.round for s in again.history] == [3] and again.weights == stored.weights
+    model = read(tmp_path, "model.json", ModelPayload)
+    assert model.weights == stored.weights and len(model.weight_history) == 1
+
+
+def test_factors_without_backtest_data_are_not_tuned(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=3))
+    stored = read(tmp_path, "weights.json", WeightsFile)
+    defaults = config.default_weights()
+    for name in ("practice_pace", "weekend_shift", "wet_skill"):      # w teście wstecznym brak ich danych
+        assert stored.weights[name] == defaults[name]
+
+
+def test_locked_weight_from_config_is_not_tuned(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "LOCKED_WEIGHTS", {"car_pace", "grid_base_weight"})
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=3))
+    stored = read(tmp_path, "weights.json", WeightsFile)
+    assert stored.weights["car_pace"] == config.FACTOR_WEIGHTS["car_pace"]
+    assert stored.weights["grid_base_weight"] == config.GRID_BASE_WEIGHT
+
+
+def test_no_weights_file_before_three_rounds(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
+    assert not (tmp_path / "weights.json").exists()

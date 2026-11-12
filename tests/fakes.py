@@ -25,9 +25,11 @@ CALENDAR = [mk_race(1, 3, 14), mk_race(2, 3, 28), mk_race(3, 4, 11)]
 
 
 class FakeJolpica:
-    def __init__(self, fail=False, grid=None, with_history=True, empty_round=None, extra_entry=False):
+    def __init__(self, fail=False, grid=None, with_history=True, empty_round=None, extra_entry=False,
+                 completed=2):
         self.fail, self.grid, self.with_history, self.empty_round = fail, grid, with_history, empty_round
         self.extra_entry = extra_entry
+        self.completed = completed
 
     def calendar(self, season):
         if self.fail:
@@ -50,7 +52,7 @@ class FakeJolpica:
             return [hist_race(2026, r, ROWS, circuit_id=f"p{r}") for r in (23, 24)]
         if season != 2027:
             return []
-        races = [hist_race(2027, r, ROWS, circuit_id=f"c{r}") for r in (1, 2) if r <= up_to_round]
+        races = [hist_race(2027, r, ROWS, circuit_id=f"c{r}") for r in range(1, self.completed + 1) if r <= up_to_round]
         if self.empty_round:
             races.append(hist_race(2027, self.empty_round, [], circuit_id="cancelled"))
         return races
