@@ -65,3 +65,18 @@ def test_aggregates_filtered_by_as_of_round_no_future_leak():
 
 def test_aggregates_default_to_empty():
     assert make_ctx().aggregates == []
+
+
+def test_zero_weight_factor_is_not_computed_or_counted_as_used():
+    from factors.base import combine
+    from helpers import make_ctx, make_entries
+
+    class F:
+        def __init__(self, name, out): self.name, self.out, self.called = name, out, False
+        def score(self, ctx):
+            self.called = True
+            return self.out
+
+    on, off = F("on", {"d1": 1.0}), F("off", {"d1": -1.0})
+    res = combine(make_ctx(entries=make_entries(("d1", "t1"))), [on, off], {"on": 1.0, "off": 0.0})
+    assert res.used == ["on"] and not off.called and res.skipped == []

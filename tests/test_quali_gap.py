@@ -47,3 +47,13 @@ def test_none_below_min_aggregates_and_without_aggregates():
 
 def test_races_with_empty_gaps_do_not_count():
     assert QualiGap().score(ctx(aggs_of(GAPS, GAPS, {}, {}))) is None          # tylko 2 użyteczne (np. 2022 bez czasów)
+
+
+def test_rookie_with_one_race_is_shrunk_and_retired_driver_ignored():
+    from helpers import make_agg, make_ctx, make_entries
+    from factors.quali_gap import QualiGap
+    entries = make_entries(("d1", "t1"), ("d2", "t1"), ("rookie", "t2"))
+    aggs = [make_agg(2027, i + 1, quali_gap={"d1": 0.0, "d2": 1.0, "gone": 6.0}) for i in range(5)]
+    aggs.append(make_agg(2027, 6, quali_gap={"d1": 0.0, "d2": 1.0, "rookie": 0.0, "gone": 6.0}))
+    s = QualiGap().score(make_ctx(entries=entries, aggregates=aggs))
+    assert "gone" not in s and abs(s["rookie"]) < abs(s["d2"])

@@ -79,7 +79,7 @@ describe('Weekend screen', () => {
     await screen.findByText('Trening 1')
     const rows = screen.getAllByRole('row').slice(1) // bez nagłówka
     expect(rows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
-      'Charles Leclerc', 'Andrea Kimi Antonelli', 'George Russell', 'Lando Norris',
+      '16Charles Leclerc', 'Andrea Kimi Antonelli', 'George Russell', '1Lando Norris',   // numer startowy w osobnej plakietce
     ])
     expect(rows[1]).toHaveTextContent('28%')
     expect(rows[3]).toHaveTextContent('<1%') // 0,4% to nie 0%
@@ -110,20 +110,6 @@ describe('Weekend screen', () => {
     expect(screen.queryByText(/Skład kierowców pochodzi/)).not.toBeInTheDocument()
   })
 
-  it('says where the track data comes from (measured)', async () => {
-    mockData()
-    render(<Weekend />)
-    expect(await screen.findByText(/wyliczona z historii \(5 wyścigów\)/)).toBeInTheDocument()
-    expect(screen.getByText(/Profil zakrętów: z telemetrii/)).toBeInTheDocument()
-  })
-
-  it('labels defaults and estimates as such', async () => {
-    mockData(withPayload((p) => { p.track_source = 'default'; p.track_sample_size = 0; p.profile_source = 'estimate' }))
-    render(<Weekend />)
-    expect(await screen.findByText(/wartości domyślne/)).toBeInTheDocument()
-    expect(screen.getByText(/szacunek/)).toBeInTheDocument()
-  })
-
   it('shows grid penalties with driver names', async () => {
     mockData(withPayload((p) => {
       p.grid_source = 'official'
@@ -138,6 +124,15 @@ describe('Weekend screen', () => {
     mockData(withPayload((p) => { p.penalties = [{ driver_id: 'max_verstappen', from_pos: 1, to_pos: 11 }] }))
     render(<Weekend />)
     expect(await screen.findByText('Max Verstappen z 1. na 11.')).toBeInTheDocument()
+  })
+
+  it('shows the car number as a separate badge next to the driver, and no track-data card', async () => {
+    mockData(withPayload((p) => { p.penalties = [{ driver_id: 'leclerc', from_pos: 3, to_pos: 13 }] }))
+    render(<Weekend />)
+    await screen.findByText('Kary na starcie')
+    expect(screen.getAllByTitle('Numer startowy').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('16').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Dane o torze')).not.toBeInTheDocument()
   })
 
   it('shows no penalty card when there are no penalties', async () => {

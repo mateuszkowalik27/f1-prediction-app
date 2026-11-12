@@ -5,7 +5,7 @@ import { LoadError, Loading } from '../components/Status.jsx'
 import StrategyCard from '../components/StrategyCard.jsx'
 import WeatherCard from '../components/WeatherCard.jsx'
 import { useData } from '../lib/data.js'
-import { PROFILE_SOURCE, TRACK_SOURCE, factorLabel, prettifyId } from '../lib/labels.js'
+import { factorLabel, prettifyId } from '../lib/labels.js'
 
 export default function Weekend() {
   const weekend = useData('weekend.json')
@@ -30,9 +30,10 @@ export default function Weekend() {
 
   const {
     race, weather, strategy, safety_car, qualifying, race_prediction, factors_skipped, low_data,
-    lineup, track_source, track_sample_size, profile_source, penalties = [],
+    lineup, penalties = [],
   } = weekend.data.payload
   const nameById = Object.fromEntries((standings.data?.drivers ?? []).map((d) => [d.id, d.name]))
+  const numberById = Object.fromEntries((standings.data?.drivers ?? []).map((d) => [d.id, d.number]))
   const skipped = factors_skipped.map(factorLabel).join(', ')
 
   return (
@@ -61,11 +62,6 @@ export default function Weekend() {
       </section>
       <WeatherCard weather={weather} />
       <StrategyCard strategy={strategy} safetyCar={safety_car} />
-      <section className="card">
-        <h3>Dane o torze</h3>
-        <p>{`Trudność wyprzedzania: ${(TRACK_SOURCE[track_source] ?? TRACK_SOURCE.default)(track_sample_size ?? 0)}`}</p>
-        <p>{`Profil zakrętów: ${PROFILE_SOURCE[profile_source] ?? 'brak danych'}`}</p>
-      </section>
 
       <section className="card">
         <h3>Szanse</h3>
@@ -77,7 +73,12 @@ export default function Weekend() {
             Wyścig
           </button>
         </div>
-        <ProbabilityTable rows={mode === 'race' ? race_prediction : qualifying} nameById={nameById} mode={mode} />
+        <ProbabilityTable
+          rows={mode === 'race' ? race_prediction : qualifying}
+          nameById={nameById}
+          numberById={numberById}
+          mode={mode}
+        />
         {!low_data && skipped && <p className="muted small">{`Pominięte czynniki (brak danych): ${skipped}.`}</p>}
       </section>
 
@@ -87,6 +88,7 @@ export default function Weekend() {
           <ul className="list">
             {penalties.map((p) => (
               <li key={p.driver_id}>
+                {numberById[p.driver_id] != null && <span className="car-no">{numberById[p.driver_id]}</span>}
                 {`${nameById[p.driver_id] ?? prettifyId(p.driver_id)} z ${p.from_pos}. na ${p.to_pos}.`}
               </li>
             ))}

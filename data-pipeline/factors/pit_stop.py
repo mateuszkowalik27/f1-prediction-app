@@ -22,5 +22,15 @@ class PitStopSpeed:
             for team, delta in agg.pit_delta.items():
                 weighted[team] += w * max(-clip, min(clip, delta))   # kłopotliwy postój nie rządzi średnią
                 total[team] += w
-        z = zscore({t: -(weighted[t] / total[t]) for t in total})    # krótszy postój = lepiej
-        return {e.driver_id: z[e.team_id] for e in ctx.entries if e.team_id in z}
+        current = {e.team_id for e in ctx.entries}               # średnią stawki liczymy po obecnych zespołach
+        raw = {t: -(weighted[t] / total[t]) for t in total if t in current}   # krótszy postój = lepiej
+        if not raw:
+            return None
+        count = defaultdict(int)
+        for agg in usable:
+            for team in agg.pit_delta:
+                count[team] += 1
+        z = zscore(raw)
+        k = config.AGG_SHRINK_K
+        return {e.driver_id: z[e.team_id] * count[e.team_id] / (count[e.team_id] + k)    # debiutant: mało wyścigów, mało pewności
+                for e in ctx.entries if e.team_id in z}

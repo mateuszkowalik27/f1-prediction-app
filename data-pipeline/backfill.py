@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -68,28 +68,48 @@ def build_aggregates(race: HistoricRace, entries: list[DriverEntry], clients: "C
     )
 
 
-def ensure_aggregates(store: HistoryStore, clients: "Clients", seasons: list[int], budget: int) -> BackfillReport:
-    """Uzupełnia brakujące agregaty (od najnowszych), próbując najwyżej `budget` wyścigów."""
+def _merge(old: RaceAggregates, new: RaceAggregates) -> RaceAggregates:
+    """Przy dopełnianiu: to, co nowa próba przyniosła, wygrywa; czego nie przyniosła, zostaje ze starego agregatu."""
+    fields = {}
+    for name in ("quali_gap", "pit_delta", "race_pace", "tyre_deg"):
+        fields[name] = getattr(new, name) or getattr(old, name)
+    for name in ("track_deg", "air_temp_c", "track_temp_c", "official_grid"):
+        value = getattr(new, name)
+        fields[name] = value if value is not None else getattr(old, name)
+    return new.model_copy(update=fields)
+
+
+def ensure_aggregates(store: HistoryStore, clients: "Clients", seasons: list[int], budget: int,
+                      now: datetime | None = None) -> BackfillReport:
+    """Uzupełnia brakujące i niekompletne agregaty (od najnowszych), próbując najwyżej `budget` wyścigów.
+    Wyścigów zakończonych niedawno (BACKFILL_MIN_AGE_DAYS) nie ruszamy: źródła dopisują dane z opóźnieniem."""
     j = clients.jolpica
+    cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=config.BACKFILL_MIN_AGE_DAYS)).date()
     candidates: list[tuple[HistoricRace, list[DriverEntry]]] = []
     for season in sorted(seasons, reverse=True):
-        races = sorted((h for h in j.season_results(season, 9999) if h.results), key=lambda h: h.round, reverse=True)
+        races = sorted((h for h in j.season_results(season, 9999) if h.results and h.date <= cutoff), key=lambda h: h.round, reverse=True)
         if not races:
             continue
         entries = j.entries(season)
         candidates += [(h, entries) for h in races]
-    missing = set(store.missing([(h.season, h.round) for h, _ in candidates]))
+    missing = set(store.pending([(h.season, h.round) for h, _ in candidates]))
 
+    # najpierw wyścigi całkiem bez agregatu, dopiero potem dopełnianie niekompletnych (stabilnie: najnowsze najpierw)
+    candidates.sort(key=lambda c: store.load(c[0].season, c[0].round) is not None)
     created = retry_later = 0
     for race, entries in candidates:
         if (race.season, race.round) not in missing:
             continue
         if created + retry_later >= budget:
             break
+        existing = store.load(race.season, race.round)
         aggregate = build_aggregates(race, entries, clients)
         if aggregate.sources["openf1"] == "failed":
-            retry_later += 1                      # niepełny agregat zamroziłby brakujące dane na stałe
-        elif store.save(aggregate):
+            retry_later += 1                      # awaria źródła: nic nie zapisujemy, próbujemy znów
+            continue
+        if existing is not None:
+            aggregate = _merge(existing, aggregate).model_copy(update={"attempts": existing.attempts + 1})
+        if store.save(aggregate, overwrite=existing is not None):
             created += 1
     return BackfillReport(created=created, retry_later=retry_later, remaining=len(missing) - created)
 

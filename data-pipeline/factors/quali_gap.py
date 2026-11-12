@@ -21,5 +21,14 @@ class QualiGap:
             for driver, gap in agg.quali_gap.items():
                 weighted[driver] += w * min(gap, config.QUALI_GAP_CLIP)   # jedno nieudane okrążenie nie rządzi średnią
                 total[driver] += w
-        z = zscore({d: -(weighted[d] / total[d]) for d in total})          # mniejsza strata = lepiej
-        return {e.driver_id: z[e.driver_id] for e in ctx.entries if e.driver_id in z}
+        current = {e.driver_id for e in ctx.entries}              # średnią stawki liczymy po obecnych kierowcach
+        raw = {d: -(weighted[d] / total[d]) for d in total if d in current}   # mniejsza strata = lepiej
+        if not raw:
+            return None
+        count = defaultdict(int)
+        for agg in usable:
+            for driver in agg.quali_gap:
+                count[driver] += 1
+        z = zscore(raw)
+        k = config.AGG_SHRINK_K
+        return {d: z[d] * count[d] / (count[d] + k) for d in z}

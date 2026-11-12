@@ -346,12 +346,10 @@ def test_openf1_exception_during_backfill_does_not_abort_and_leaves_no_partial_f
     assert not history.exists() or (not list(history.glob("*.json")) and not list(history.glob("*.tmp")))
 
 
-def test_jolpica_failure_in_backfill_leaves_files_untouched_and_exits_1(tmp_path):
-    names = ["meta.json", "calendar.json", "standings.json", "weekend.json", "model.json"]
-    for n in names:
-        (tmp_path / n).write_text("OLD")
-    assert main(["--out", str(tmp_path), "--season", "2027"], clients=clients(fail_quali_times=True)) == 1
-    assert all((tmp_path / n).read_text() == "OLD" for n in names)
+def test_jolpica_failure_in_backfill_does_not_abort_the_run(tmp_path):
+    # uzupełnianie historii to dodatek: jego awaria nie może zatrzymać prognozy weekendu
+    assert main(["--out", str(tmp_path), "--season", "2027"], clients=clients(fail_quali_times=True)) == 0
+    assert (tmp_path / "weekend.json").exists()
 
 
 # --- oficjalna siatka z karami (model v2) ---
@@ -441,3 +439,9 @@ def test_forecast_is_asked_for_the_race_start_hour_and_temperature_reaches_the_p
     run_pipeline(tmp_path, 2027, NOW, c)
     assert calls == [datetime(2027, 4, 11, 13, 0, tzinfo=UTC)]            # start wyścigu rundy 3
     assert read(tmp_path, "weekend.json", WeekendResponse).payload.weather.start_temperature_c == 15.0
+
+
+def test_partial_official_grid_falls_back_to_qualifying_instead_of_inventing_penalties(monkeypatch):
+    monkeypatch.setattr(config, "GRID_MAX_MISSING", 1)
+    g = start_grid({"d3": 1, "d1": 2})        # OpenF1 jeszcze niepełne albo część kierowców się nie zmapowała
+    assert g.source == "qualifying" and g.grid == QUALI_GRID and g.penalties == []

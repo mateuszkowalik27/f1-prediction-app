@@ -1,6 +1,6 @@
 import { pct, prettifyId } from '../lib/labels.js'
 
-export default function ProbabilityTable({ rows, nameById, mode }) {
+export default function ProbabilityTable({ rows, nameById, numberById = {}, mode }) {
   const race = mode === 'race'
   const sorted = [...rows].sort((a, b) => b.win - a.win)
   const max = sorted[0]?.win || 1
@@ -17,7 +17,12 @@ export default function ProbabilityTable({ rows, nameById, mode }) {
       <tbody>
         {sorted.map((row) => (
           <tr key={row.driver_id}>
-            <td>{nameById[row.driver_id] ?? prettifyId(row.driver_id)}</td>
+            <td>
+              {numberById[row.driver_id] != null && (
+                <span className="car-no" title="Numer startowy">{numberById[row.driver_id]}</span>
+              )}
+              {nameById[row.driver_id] ?? prettifyId(row.driver_id)}
+            </td>
             <td>
               <span>{pct(row.win)}</span>
               <div className="bar" aria-hidden="true">

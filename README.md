@@ -130,6 +130,18 @@ będzie więcej wyścigów. Uwaga: `pit_stop` może częściowo wynikać z tego,
   sezonu), ale to nadal tylko ok. 70 wyścigów, a szum jest duży. Uczciwa miara to „Przewidywania, które faktycznie
   widziałeś" (`live_evaluation` w `model.json`): prognoza zapisana tuż przed startem i porównana z wynikiem; pojawi
   się po pierwszych wyścigach z robotem.
+- **„Poza próbką" nie jest w pełni czyste.** Bazowe wagi i stałe z v1 (`FACTOR_WEIGHTS`, `GRID_BASE_WEIGHT`,
+  `RACE_NOISE_BASE`) były strojone na sezonie 2026, a progi obcinania wartości odstających (`QUALI_GAP_CLIP`,
+  `PIT_DELTA_CLIP`, `RACE_PACE_CLIP`) dobrano, patrząc na rundę 20. sezonu 2026. Wynik 2026 jest więc optymistyczny;
+  porównania „z czynnikiem / bez" są na to dużo mniej wrażliwe. Kalibracja (τ) jest dopasowana i oceniana na tych
+  samych ok. 68 przewidywaniach, więc jej poprawa jest liczona na próbce, na której ją dobrano.
+- **Reguła „zostawiamy zmienną" ma małą moc.** Przy zerowym efekcie przechodzi mniej więcej co drugi raz, a
+  sprawdzono sześć zmiennych po kolei. `quali_gap` (zysk 0,00008, gorszy w 2025) uznaj za prowizoryczny, a `pit_stop`
+  może po części mierzyć ogólną siłę zespołu, nie samą szybkość załogi.
+- **Niekompletne agregaty z OpenF1 są dopełniane.** Przegląd znalazł 21 z 90 wyścigów od 2023 roku z brakującą częścią
+  danych (okrążenia, pogoda albo siatka), zapisanych jako kompletne. Robot ponawia teraz takie wyścigi do trzech prób
+  i nie zamraża świeżo zakończonych (poniżej 2 dni). Dopóki historia się nie dopełni, werdykty bramki dla
+  `race_vs_quali`, `tyre_deg_fit` i `temp_fit` opierają się na części danych; po dopełnieniu warto je sprawdzić ponownie.
 - **Historia z OpenF1 zaczyna się w 2023 roku**, więc zmienne z okrążeń, opon, temperatury i oficjalnej siatki mają
   krótszą historię niż wyniki z Jolpica (od 2022).
 - **Temperatura w modelu to temperatura powietrza** (prognoza podaje powietrze, nie tor); temperaturę toru zapisujemy

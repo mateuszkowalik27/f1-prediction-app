@@ -58,7 +58,8 @@ def zscore(values: dict[str, float]) -> dict[str, float]:
 def combine(ctx: RaceContext, factors: list[Factor], weights: dict[str, float]) -> CombinedStrength:
     scored: dict[str, dict[str, float]] = {}
     skipped: list[str] = []
-    for factor in factors:
+    active = [f for f in factors if weights.get(f.name, 0) > 0]
+    for factor in (active or factors):   # czynniki z wagą 0 są wyłączone: nie liczymy ich i nie zaliczamy do użytych
         scores = factor.score(ctx)
         if scores is None:
             skipped.append(factor.name)

@@ -4,7 +4,18 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import config
 from schemas import RaceAggregates
+
+
+def needs_retry(agg: RaceAggregates) -> bool:
+    """Agregat niekompletny (brak którejś z części) i jeszcze nie wyczerpał prób dopełnienia."""
+    if agg.attempts >= config.MAX_AGGREGATE_ATTEMPTS:
+        return False
+    incomplete = not agg.quali_gap or not agg.pit_delta
+    if agg.season >= config.OPENF1_FIRST_SEASON:
+        incomplete = incomplete or not agg.race_pace or agg.air_temp_c is None or not agg.official_grid
+    return incomplete
 
 
 class HistoryStore:
@@ -20,9 +31,10 @@ class HistoryStore:
         except (OSError, ValueError):
             return None  # brak pliku albo uszkodzony: traktujemy jak brakujący
 
-    def save(self, agg: RaceAggregates) -> bool:
-        """Zapisuje agregat. Poprawnego pliku nigdy nie nadpisuje (zwraca False); uszkodzony zastępuje."""
-        if self.load(agg.season, agg.round) is not None:
+    def save(self, agg: RaceAggregates, overwrite: bool = False) -> bool:
+        """Zapisuje agregat. Poprawnego pliku nadpisuje tylko na wyraźne polecenie (`overwrite`, przy dopełnianiu
+        niekompletnego); inaczej zwraca False. Uszkodzony zastępuje zawsze."""
+        if self.load(agg.season, agg.round) is not None and not overwrite:
             return False
         target = self.path(agg.season, agg.round)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -39,6 +51,15 @@ class HistoryStore:
 
     def missing(self, races: list[tuple[int, int]]) -> list[tuple[int, int]]:
         return [(s, r) for s, r in races if self.load(s, r) is None]
+
+    def pending(self, races: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        """Wyścigi bez agregatu albo z niekompletnym, który warto jeszcze dopełnić."""
+        out = []
+        for s, r in races:
+            agg = self.load(s, r)
+            if agg is None or needs_retry(agg):
+                out.append((s, r))
+        return out
 
     @staticmethod
     def _load_path(path: Path) -> RaceAggregates | None:

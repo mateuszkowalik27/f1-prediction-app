@@ -143,6 +143,7 @@ class RaceAggregates(BaseModel):
     track_temp_c: float | None
     official_grid: dict[str, int] | None
     sources: dict[str, Literal["ok", "missing", "failed"]]   # klucze: jolpica, openf1
+    attempts: int = 1                # ile razy budowaliśmy ten agregat (niekompletny próbujemy dopełnić)
 
 
 class DriverProbability(BaseModel):
@@ -177,6 +178,7 @@ class StandingRow(BaseModel):
     points: float
     wins: int
     position: int
+    number: int | None = None    # numer startowy kierowcy (tylko w klasyfikacji kierowców)
 
 
 class Standings(BaseModel):

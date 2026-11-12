@@ -94,6 +94,9 @@ SLOW_LAP_RATIO = 1.07           # okrążenia wolniejsze niż 107% mediany (safe
 
 # Historia agregatów (model v2)
 BACKFILL_RACES_PER_RUN = 6      # ile wyścigów najwyżej uzupełniamy na jedno uruchomienie robota (limity API)
+MAX_AGGREGATE_ATTEMPTS = 3      # tyle razy próbujemy dopełnić niekompletny agregat, potem zostaje jak jest
+BACKFILL_MIN_AGE_DAYS = 2       # świeżo zakończonego wyścigu nie zamrażamy: źródła dopisują dane z opóźnieniem
+GRID_MAX_MISSING = 3            # ilu zakwalifikowanych może brakować w oficjalnej siatce (start z alei), zanim jej nie ufamy
 FIRST_BACKFILL_SEASON = 2022    # od którego sezonu zbieramy historię
 OPENF1_FIRST_SEASON = 2023      # OpenF1 ma dane dopiero od tego sezonu
 TEST_SEASONS = [2024, 2025, 2026]   # sezony oceniane poza próbką (2022-2023 służą tylko do strojenia)
@@ -114,6 +117,7 @@ QUALI_GAP_CLIP = 7.0      # strata w kwalifikacjach powyżej tylu % jest przycin
 # Bramka quali_gap (2026-11-12, poza próbką, Brier z czynnikiem / bez): 2024 0,03628/0,03677, 2025 0,03355/0,03277,
 #   2026 0,02649/0,02699; średnio 0,03210/0,03218 -> ZOSTAJE (lepszy w 2 z 3 sezonów), ale zysk jest bardzo mały (~0,25%).
 PIT_DELTA_CLIP = 2.0         # różnica czasu postoju zespołu względem stawki jest przycinana do +-2 s na wyścig
+AGG_SHRINK_K = 3             # ściąganie quali_gap/pit_stop ku zeru dla kierowców i zespołów z małą liczbą wyścigów: n/(n+K)
 RACEQ_SHRINK_K = 4           # ściąganie przewagi niedzielnej ku zeru: n/(n+K)
 RACE_PACE_CLIP = 5.0         # tempo wyścigowe względem stawki przycinane do +-5% (uszkodzone auto)
 # Bramka pit_stop (2026-11-12, poza próbką, Brier z czynnikiem / bez): 2024 0,03623/0,03628, 2025 0,03215/0,03355,

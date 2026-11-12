@@ -122,7 +122,8 @@ def resolve_start_grid(race: Race, now_utc: datetime, clients: Clients) -> Start
         return None
     quali, entries = base
     official, _ = _optional("siatka startowa (OpenF1)", clients.openf1.starting_grid, race, entries)
-    if not official:
+    if not official or sum(d in official for d in quali) < len(quali) - config.GRID_MAX_MISSING:
+        # brak siatki albo niepełna/źle zmapowana (brakuje więcej kierowców niż start z alei): nie zgadujemy kar
         return StartGrid(quali, quali, entries, "qualifying", [])
     known = {e.driver_id for e in entries}
     ordered = sorted((d for d in official if d in known), key=lambda d: official[d])
@@ -273,14 +274,12 @@ def _load_oos(out_dir: Path) -> list[SeasonScore]:
         return []
 
 
-def _backfill_history(store: HistoryStore, clients: Clients, season: int) -> None:
-    """Uzupełnia historię agregatów w ramach budżetu. Awaria Jolpica przerywa przebieg (jak wszędzie),
-    inny błąd tylko pomija uzupełnianie: to dodatek, nie warunek działania."""
+def _backfill_history(store: HistoryStore, clients: Clients, season: int, now: datetime) -> None:
+    """Uzupełnia historię agregatów w ramach budżetu. To dodatek, nie warunek działania: każdy błąd (też Jolpica)
+    tylko pomija uzupełnianie; o przerwaniu przebiegu decydują główne zapytania."""
     try:
         ensure_aggregates(store, clients, list(range(config.FIRST_BACKFILL_SEASON, season + 1)),
-                          config.BACKFILL_RACES_PER_RUN)
-    except JolpicaError:
-        raise
+                          config.BACKFILL_RACES_PER_RUN, now=now)
     except Exception as exc:  # noqa: BLE001
         print(f"UWAGA: uzupełnianie historii nie zadziałało ({type(exc).__name__}: {exc}); pomijam.", file=sys.stderr)
 
@@ -336,7 +335,7 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
         previous = clients.jolpica.standings(season - 1)
         standings = previous.model_copy(update={"season": season - 1}) if previous.drivers else standings
     store = HistoryStore(out_dir / "history")
-    _backfill_history(store, clients, season)
+    _backfill_history(store, clients, season, now_utc)
     aggregates = store.all()
     cases = prepare_rounds(season, clients, calendar, aggregates)   # awaria Jolpica przerywa przebieg: pliki zostają nietknięte
     weights_file = _tuned_weights(out_dir, cases, season)

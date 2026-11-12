@@ -9,6 +9,7 @@ from helpers import hist_race
 from history_store import HistoryStore
 from schemas import LapRecord, RaceAggregates, WeatherSample
 
+FAR = datetime(2030, 1, 1, tzinfo=timezone.utc)
 ROWS = [("d1", "t1", 1), ("d2", "t1", 2), ("d3", "t2", None), ("d4", "t2", 4)]
 
 
@@ -22,16 +23,17 @@ def steady_laps():
 
 def test_creates_up_to_budget_newest_first(tmp_path):
     store = HistoryStore(tmp_path)
-    report = ensure_aggregates(store, clients(completed=2), [2026, 2027], budget=3)
+    report = ensure_aggregates(store, clients(completed=2), [2026, 2027], budget=3, now=FAR)
     assert report == BackfillReport(created=3, retry_later=0, remaining=1)
     assert [(a.season, a.round) for a in store.all()] == [(2026, 24), (2027, 1), (2027, 2)]   # bez 2026-23, najstarszego
 
 
 def test_second_run_is_idempotent(tmp_path):
     store = HistoryStore(tmp_path)
-    ensure_aggregates(store, clients(completed=2), [2026, 2027], budget=10)
+    for _ in range(3):                                   # niekompletne agregaty dostają MAX_AGGREGATE_ATTEMPTS prób
+        ensure_aggregates(store, clients(completed=2), [2026, 2027], budget=10, now=FAR)
     before = {p.name: p.read_text() for p in tmp_path.iterdir()}
-    report = ensure_aggregates(store, clients(completed=2), [2026, 2027], budget=10)
+    report = ensure_aggregates(store, clients(completed=2), [2026, 2027], budget=10, now=FAR)
     assert report == BackfillReport(created=0, retry_later=0, remaining=0)
     assert {p.name: p.read_text() for p in tmp_path.iterdir()} == before
 
@@ -39,14 +41,14 @@ def test_second_run_is_idempotent(tmp_path):
 def test_failed_openf1_is_not_saved_and_counted(tmp_path):
     store = HistoryStore(tmp_path)
     c = clients(completed=2, openf1=FakeOpenF1(broken=True))
-    report = ensure_aggregates(store, c, [2026, 2027], budget=10)
+    report = ensure_aggregates(store, c, [2026, 2027], budget=10, now=FAR)
     assert report == BackfillReport(created=0, retry_later=4, remaining=4)
     assert store.all() == [] and not list(tmp_path.glob("*.tmp"))
 
 
 def test_missing_openf1_is_saved_with_legitimately_empty_fields(tmp_path):
     store = HistoryStore(tmp_path)
-    ensure_aggregates(store, clients(completed=2), [2027], budget=10)       # FakeOpenF1 zwraca None = brak danych
+    ensure_aggregates(store, clients(completed=2), [2027], budget=10, now=FAR)       # FakeOpenF1 zwraca None = brak danych
     agg = store.load(2027, 2)
     assert agg.sources == {"jolpica": "ok", "openf1": "missing"}
     assert agg.race_pace == {} and agg.tyre_deg == {} and agg.official_grid is None and agg.air_temp_c is None
@@ -62,7 +64,7 @@ def test_season_before_2023_never_calls_openf1():
 def test_jolpica_failure_raises_and_writes_nothing(tmp_path):
     store = HistoryStore(tmp_path)
     with pytest.raises(JolpicaError):
-        ensure_aggregates(store, clients(completed=2, fail_quali_times=True), [2026, 2027], budget=10)
+        ensure_aggregates(store, clients(completed=2, fail_quali_times=True), [2026, 2027], budget=10, now=FAR)
     assert store.all() == []
 
 
@@ -71,15 +73,15 @@ def test_existing_file_never_overwritten_and_not_counted(tmp_path):
     store.save(RaceAggregates(
         season=2027, round=2, circuit_id="c2", computed_at=datetime(2027, 1, 1, tzinfo=timezone.utc),
         quali_gap={"d1": 123.0}, pit_delta={}, race_pace={}, tyre_deg={}, track_deg=None, air_temp_c=None,
-        track_temp_c=None, official_grid=None, sources={"jolpica": "ok", "openf1": "ok"}))
-    report = ensure_aggregates(store, clients(completed=2), [2027], budget=10)
+        track_temp_c=None, official_grid=None, sources={"jolpica": "ok", "openf1": "ok"}, attempts=3))
+    report = ensure_aggregates(store, clients(completed=2), [2027], budget=10, now=FAR)
     assert report.created == 1                                                # tylko 2027-1
     assert store.load(2027, 2).quali_gap == {"d1": 123.0}
 
 
 def test_race_without_results_is_skipped(tmp_path):
     store = HistoryStore(tmp_path)
-    ensure_aggregates(store, clients(completed=2, empty_round=3), [2027], budget=10)   # runda 3 = odwołana, bez wyników
+    ensure_aggregates(store, clients(completed=2, empty_round=3), [2027], budget=10, now=FAR)   # runda 3 = odwołana, bez wyników
     assert [(a.season, a.round) for a in store.all()] == [(2027, 1), (2027, 2)]
 
 
@@ -98,5 +100,31 @@ def test_aggregate_fields_are_filled_from_sources():
 def test_transient_openf1_error_that_returns_none_is_failed_not_missing(tmp_path):
     f1 = FakeOpenF1(transient=True)                     # metoda zwraca None, ale licznik błędów rośnie
     store = HistoryStore(tmp_path)
-    report = ensure_aggregates(store, clients(completed=2, openf1=f1), [2027], budget=10)
+    report = ensure_aggregates(store, clients(completed=2, openf1=f1), [2027], budget=10, now=FAR)
     assert report.created == 0 and report.retry_later == 2 and store.all() == []
+
+
+def test_incomplete_aggregate_is_completed_on_a_later_run_and_keeps_old_parts(tmp_path):
+    store = HistoryStore(tmp_path)
+    first = clients(completed=2, openf1=FakeOpenF1())                  # OpenF1 bez danych: agregat niekompletny
+    ensure_aggregates(store, first, [2027], budget=10, now=FAR)
+    assert store.load(2027, 2).official_grid is None and store.load(2027, 2).attempts == 1
+    f1 = FakeOpenF1(laps=steady_laps(), weather=WeatherSample(air_c=21.0, track_c=33.0), grid={"d1": 1, "d2": 2})
+    ensure_aggregates(store, clients(completed=2, openf1=f1), [2027], budget=10, now=FAR)
+    agg = store.load(2027, 2)
+    assert agg.official_grid == {"d1": 1, "d2": 2} and agg.air_temp_c == 21.0 and agg.race_pace
+    assert agg.quali_gap and agg.attempts == 2
+
+
+def test_gives_up_after_max_attempts(tmp_path):
+    store = HistoryStore(tmp_path)
+    for _ in range(5):
+        ensure_aggregates(store, clients(completed=2), [2027], budget=10, now=FAR)
+    assert store.load(2027, 2).attempts == 3
+
+
+def test_recently_finished_race_is_not_frozen_yet(tmp_path):
+    store = HistoryStore(tmp_path)
+    just_after = datetime(2027, 3, 2, 12, 0, tzinfo=timezone.utc)      # runda 2 (1 marca) odbyła się dobę temu
+    report = ensure_aggregates(store, clients(completed=2), [2027], budget=10, now=just_after)
+    assert report.created == 1 and [(a.season, a.round) for a in store.all()] == [(2027, 1)]   # runda 2 poczeka
