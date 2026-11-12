@@ -98,7 +98,7 @@ td.num, th.num { text-align: right; }
 .version { text-align: center; margin: 24px 0 0; opacity: 0.7; }
 
 /* numer startowy kierowcy: ciemna "tabliczka", żeby nie mylić go z miejscem na starcie */
-.car-no { display: inline-block; min-width: 1.9em; text-align: center; font-size: 0.72rem; font-weight: 700; line-height: 1.5; padding: 0 5px; margin-right: 8px; border-radius: 4px; background: var(--text); color: var(--bg); font-variant-numeric: tabular-nums; }
+.car-no { display: inline-block; box-sizing: border-box; width: 2.4em; flex: none; text-align: center; font-size: 0.72rem; font-weight: 700; line-height: 1.5; padding: 0 5px; margin-right: 8px; border-radius: 4px; background: var(--text); color: var(--bg); font-variant-numeric: tabular-nums; }
 
 /* wyniki sesji w Kalendarzu */
 .list li { display: block; }
