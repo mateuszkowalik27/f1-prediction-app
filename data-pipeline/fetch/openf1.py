@@ -13,7 +13,9 @@ from urllib.parse import quote
 
 import httpx
 
-from schemas import DriverEntry, HistoricRace, PracticeData, Race, SafetyEvent, TyreHistory
+from schemas import (
+    DriverEntry, HistoricRace, LapRecord, PracticeData, Race, SafetyEvent, TyreHistory, WeatherSample,
+)
 
 BASE_URL = "https://api.openf1.org/v1"
 SLOW_LAP_RATIO = 1.07          # okrążenia wolniejsze niż 107% najlepszego w sesji są odrzucane
@@ -178,4 +180,59 @@ class OpenF1Client:
             speeds = [float(r["speed"]) for r in sorted(rows, key=lambda r: r["date"])]
             return speeds if len(speeds) >= MIN_SPEED_SAMPLES else None
         except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError):
+            return None
+
+    # --- model v2: okrążenia wyścigu i pogoda ---
+    def _race_session_key(self, race: Race) -> int | None:
+        day = _race_day(race)
+        if day is None:
+            return None
+        found = [s for s in self._sessions(day, before=0, after=0) if s["session_name"] == "Race"]
+        return found[0]["session_key"] if found else None
+
+    def race_laps(self, race: Race, entries: list[DriverEntry]) -> list[LapRecord] | None:
+        """Okrążenia sesji Race z mieszanką i wiekiem opon (z /stints). Brak danych lub błąd -> None."""
+        try:
+            key = self._race_session_key(race)
+            if key is None:
+                return None
+            code_to_id = {e.code: e.driver_id for e in entries}
+            num_to_id = {d["driver_number"]: code_to_id.get(d["name_acronym"])
+                         for d in self._get("/drivers", {"session_key": key})}
+            stints: dict[int, list[dict]] = defaultdict(list)
+            for st in self._get("/stints", {"session_key": key}):
+                stints[st["driver_number"]].append(st)
+            records = []
+            for row in self._get("/laps", {"session_key": key}):
+                driver_id = num_to_id.get(row.get("driver_number"))
+                if not driver_id:
+                    continue
+                compound = tyre_age = None
+                for st in stints.get(row["driver_number"], []):
+                    end = st.get("lap_end") or 10_000   # 0/None = stint jeszcze trwa
+                    if st["lap_start"] <= row["lap_number"] <= end:
+                        compound = st.get("compound")
+                        tyre_age = (st.get("tyre_age_at_start") or 0) + (row["lap_number"] - st["lap_start"])
+                        break
+                records.append(LapRecord(
+                    driver_id=driver_id, lap=row["lap_number"], duration_s=row.get("lap_duration"),
+                    is_pit_out=bool(row.get("is_pit_out_lap")), compound=compound, tyre_age=tyre_age,
+                ))
+            return records or None
+        except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
+            return None
+
+    def race_weather(self, race: Race) -> WeatherSample | None:
+        """Mediana temperatury powietrza i toru w trakcie sesji Race albo None."""
+        try:
+            key = self._race_session_key(race)
+            if key is None:
+                return None
+            rows = self._get("/weather", {"session_key": key})
+            air = [r["air_temperature"] for r in rows if r.get("air_temperature") is not None]
+            track = [r["track_temperature"] for r in rows if r.get("track_temperature") is not None]
+            if not air:
+                return None
+            return WeatherSample(air_c=statistics.median(air), track_c=statistics.median(track) if track else None)
+        except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
             return None

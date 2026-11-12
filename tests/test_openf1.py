@@ -149,3 +149,72 @@ def test_tyre_history_median_stops_and_compounds():
     th = c.tyre_history("monaco", [history(2024, date(2024, 5, 26))])
     assert th.median_stops == 1
     assert sorted(th.dominant_compounds[:2]) == ["HARD", "MEDIUM"]
+
+
+# --- okrążenia wyścigu i pogoda (model v2) ---
+def stint(num, n, start, end, compound, age):
+    return {"driver_number": num, "stint_number": n, "lap_start": start, "lap_end": end, "compound": compound,
+            "tyre_age_at_start": age}
+
+
+def race_lap_routes(laps=None, stints=None):
+    return {
+        "/sessions": lambda q: (200, [sess(9, "Race", "2024-05-26"), sess(5, "Qualifying", "2024-05-25")]),
+        "/drivers": lambda q: (200, [{"driver_number": 16, "name_acronym": "LEC"},
+                                     {"driver_number": 1, "name_acronym": "VER"},
+                                     {"driver_number": 99, "name_acronym": "XXX"}]),
+        "/stints": lambda q: (200, stints if stints is not None else [
+            stint(16, 1, 1, 10, "MEDIUM", 0), stint(16, 2, 11, 0, "HARD", 2), stint(1, 1, 1, 0, "SOFT", 1)]),
+        "/laps": lambda q: (200, laps if laps is not None else [
+            lap(9, 16, 91.0), lap(12, 16, 90.5), lap(1, 16, 100.0, pit_out=False), lap(3, 1, 92.0),
+            lap(4, 99, 93.0)]),
+    }
+
+
+def test_race_laps_join_stint_compound_and_tyre_age():
+    records = make_client(race_lap_routes()).race_laps(race(), ENTRIES)
+    by = {(r.driver_id, r.lap): r for r in records}
+    assert (by[("leclerc", 9)].compound, by[("leclerc", 9)].tyre_age) == ("MEDIUM", 8)     # 0 + (9 - 1)
+    assert (by[("leclerc", 12)].compound, by[("leclerc", 12)].tyre_age) == ("HARD", 3)     # 2 + (12 - 11); lap_end 0 = trwa
+    assert (by[("max_verstappen", 3)].compound, by[("max_verstappen", 3)].tyre_age) == ("SOFT", 3)
+
+
+def test_race_laps_maps_codes_to_driver_ids_and_skips_unknown_drivers():
+    records = make_client(race_lap_routes()).race_laps(race(), ENTRIES)
+    assert {r.driver_id for r in records} == {"leclerc", "max_verstappen"}   # kod XXX nie ma wpisu
+    assert all(isinstance(r.duration_s, float) for r in records)
+
+
+def test_race_laps_none_on_http_error():
+    assert make_client({"/sessions": lambda q: (500, {})}).race_laps(race(), ENTRIES) is None
+
+
+def test_race_laps_none_without_race_session():
+    routes = race_lap_routes()
+    routes["/sessions"] = lambda q: (200, [sess(5, "Qualifying", "2024-05-25")])
+    assert make_client(routes).race_laps(race(), ENTRIES) is None
+
+
+def weather_rows(airs, tracks=None):
+    tracks = tracks or [None] * len(airs)
+    return [{"date": f"2024-05-26T12:{i:02d}:00+00:00", "air_temperature": a, "track_temperature": t}
+            for i, (a, t) in enumerate(zip(airs, tracks))]
+
+
+def weather_client(rows):
+    return make_client({"/sessions": lambda q: (200, [sess(9, "Race", "2024-05-26")]),
+                        "/weather": lambda q: (200, rows) if rows else (404, {"detail": "No results found."})})
+
+
+def test_race_weather_uses_median():
+    w = weather_client(weather_rows([20.0, 22.0, 30.0], [30.0, 34.0, 50.0])).race_weather(race())
+    assert (w.air_c, w.track_c) == (22.0, 34.0)
+
+
+def test_race_weather_track_temp_is_optional():
+    w = weather_client(weather_rows([20.0, 22.0, 24.0])).race_weather(race())
+    assert w.air_c == 22.0 and w.track_c is None
+
+
+def test_race_weather_none_without_rows():
+    assert weather_client([]).race_weather(race()) is None
