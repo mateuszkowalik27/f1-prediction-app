@@ -129,3 +129,5 @@ DEG_HIGH_RATIO = 1.25        # tor uznajemy za "wysokie zużycie", gdy jego pozi
 # Bramka temp_fit (2026-11-12, poza próbką, Brier z czynnikiem / bez): 2024 0,03621/0,03623, 2025 0,03360/0,03215,
 #   2026 0,02540/0,02549; średnio 0,03173/0,03129 -> WYPADA (gorszy średnio, wyraźnie w 2025). Waga 0, LOCKED_WEIGHTS.
 #   Uwaga: w teście wstecznym prognozę zastępowała faktyczna temperatura powietrza z wyścigu (lekko optymistycznie).
+# Punkt odniesienia po modelu v2 (poza próbką, 2026-11-12): Brier 2024 = 0,03623, 2025 = 0,03215, 2026 = 0,02549
+#   (średnio 0,03129 wobec 0,03218 przed v2); kalibracja tau = 0,8 (0,03163 -> 0,03145).
