@@ -55,8 +55,8 @@ Wszystko, co dotyczy modelu, jest w jednym pliku: `data-pipeline/config.py`.
 
 Nadpisania są opcjonalne i domyślnie puste: wszystko liczy się samo z danych.
 
-Wagi, które robot dostroił, są w `public/data/weights.json` (z historią zmian), a w aplikacji widać je w zakładce
-**Model**.
+Wagi, które robot dostroił, są w `public/data/weights.json` (z historią zmian), a ocena trafności modelu w
+`public/data/model.json`. Aplikacja ich nie pokazuje (zakładkę Model usunięto), ale pliki nadal się aktualizują.
 
 ### Dodanie nowego czynnika do modelu
 
@@ -96,9 +96,9 @@ npm run build       # wersja produkcyjna do katalogu dist
 - **Predykcje to prawdopodobieństwa.** Faworyt z 40% szans przegrywa w 60% wyścigów.
 - **Skład kierowców.** Przed pierwszym wyścigiem sezonu pochodzi z poprzedniego roku (aplikacja o tym ostrzega).
   Po kwalifikacjach bierze prawdziwy skład z ich wyników, razem z zastępstwami i zmianami zespołów.
-- **Ocena trafności jest optymistyczna.** Zakładka Model pokazuje test wsteczny, w którym wagi są dostrajane na tych
+- **Ocena trafności jest optymistyczna.** Test wsteczny w `model.json` w którym wagi są dostrajane na tych
   samych wyścigach, na których model oceniamy. Uczciwsza jest sekcja „Przewidywania, które faktycznie widziałeś":
-  prognoza zapisana tuż przed startem i porównana z wynikiem. Pojawi się po pierwszych wyścigach z robotem.
+  prognoza zapisana tuż przed startem i porównana z wynikiem. Zapisuje się w `model.json` (pole `live_evaluation`) po pierwszych wyścigach z robotem.
 - **Poza sezonem** (grudzień-marzec) klasyfikacja pokazuje ostatnią zakończoną tabelę z oznaczeniem sezonu.
 - Jolpica ma limit ok. 200 zapytań na godzinę. Robot zapamiętuje dane zakończonych sezonów w cache GitHub Actions,
   żeby się w nim mieścić.

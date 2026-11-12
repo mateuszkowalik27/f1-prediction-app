@@ -46,22 +46,6 @@ export function stopsLabel(n) {
   return n >= 2 && n <= 4 ? `${n} pit-stopy` : `${n} pit-stopów`
 }
 
-// Liczba w polskim zapisie: 0.2 -> "0,20"
-export const num = (value, digits = 2) =>
-  value.toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits })
-
-// Zmiany wag między dwiema ostatnimi rundami, np. "forma kierowcy: 0,20 → 0,27 po rundzie 14".
-// Pomijamy wagi, które po zaokrągleniu wyglądają tak samo.
-export function weightChanges(history) {
-  if (!Array.isArray(history) || history.length < 2) return []
-  const previous = history[history.length - 2]
-  const last = history[history.length - 1]
-  if (previous.season !== last.season) return [] // numery rund powtarzają się co sezon: nie porównujemy sezonów
-  return Object.keys(last.weights)
-    .filter((key) => key in previous.weights && num(previous.weights[key]) !== num(last.weights[key]))
-    .map((key) => `${factorLabel(key)}: ${num(previous.weights[key])} → ${num(last.weights[key])} po rundzie ${last.round}`)
-}
-
 export const TRACK_SOURCE = {
   computed: (n) => `wyliczona z historii (${n === 1 ? '1 wyścig' : n >= 2 && n <= 4 ? `${n} wyścigi` : `${n} wyścigów`})`,
   default: () => 'wartości domyślne (brak historii toru)',

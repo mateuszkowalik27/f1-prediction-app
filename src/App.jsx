@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useData } from './lib/data.js'
 import { formatWarsaw } from './lib/time.js'
 import Calendar from './screens/Calendar.jsx'
-import ModelInfo from './screens/ModelInfo.jsx'
 import Standings from './screens/Standings.jsx'
 import Weekend from './screens/Weekend.jsx'
 
@@ -10,7 +9,6 @@ const TABS = [
   { id: 'weekend', label: 'Weekend', Screen: Weekend },
   { id: 'standings', label: 'Klasyfikacje', Screen: Standings },
   { id: 'calendar', label: 'Kalendarz', Screen: Calendar },
-  { id: 'model', label: 'Model', Screen: ModelInfo },
 ]
 
 export default function App() {

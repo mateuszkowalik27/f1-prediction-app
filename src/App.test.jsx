@@ -12,6 +12,11 @@ describe('App', () => {
     expect(screen.getByText('F1 Prediction App')).toBeInTheDocument()
   })
 
+  it('has exactly three tabs: Weekend, Klasyfikacje, Kalendarz (no Model tab)', () => {
+    render(<App />)
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Weekend', 'Klasyfikacje', 'Kalendarz'])
+  })
+
   it('switches screens with the bottom tabs', async () => {
     render(<App />)
     expect(screen.getByRole('tab', { name: 'Weekend' })).toHaveAttribute('aria-selected', 'true')
