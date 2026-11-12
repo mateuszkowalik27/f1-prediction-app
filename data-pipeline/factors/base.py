@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from schemas import (
-    DriverEntry, HistoricRace, PracticeData, Race, TrackProfile, TrackStats, WeatherForecast,
+    DriverEntry, HistoricRace, PracticeData, Race, RaceAggregates, TrackProfile, TrackStats, WeatherForecast,
 )
 
 LOW_DATA_FACTOR_COUNT = 3
@@ -26,6 +26,7 @@ class RaceContext:
     grid: dict[str, int] | None = None
     profile: TrackProfile | None = None
     profiles: dict[str, TrackProfile] = field(default_factory=dict)    # profile torów rozegranych rund sezonu
+    aggregates: list[RaceAggregates] = field(default_factory=list)     # agregaty wyścigów wcześniejszych niż bieżący
 
 
 class Factor(Protocol):

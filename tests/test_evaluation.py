@@ -67,3 +67,25 @@ def test_round_without_results_is_skipped():
 
 def test_evaluate_season_returns_empty_when_jolpica_fails():
     assert evaluate_season(2027, clients(fail=True), weights(), n=100) == []
+
+
+# --- agregaty w teście wstecznym i wiele sezonów (model v2) ---
+from evaluation import prepare_seasons   # noqa: E402
+from helpers import make_agg             # noqa: E402
+
+
+def test_prepare_rounds_passes_aggregates_to_context_without_the_round_itself_or_later():
+    aggs = [make_agg(2027, 1), make_agg(2027, 2), make_agg(2027, 5)]
+    cases = {c.round: c for c in prepare_rounds(2027, clients(), aggregates=aggs)}
+    assert cases[1].ctx.aggregates == []
+    assert [(a.season, a.round) for a in cases[2].ctx.aggregates] == [(2027, 1)]
+
+
+def test_prepare_seasons_returns_cases_per_season():
+    by_season = prepare_seasons([2026, 2027], clients(), [])
+    assert sorted(by_season) == [2026, 2027]
+    assert [c.round for c in by_season[2027]] == [1, 2] and [c.round for c in by_season[2026]] == [23, 24]
+
+
+def test_prepare_seasons_skips_season_without_results():
+    assert sorted(prepare_seasons([2020, 2027], clients(), [])) == [2027]

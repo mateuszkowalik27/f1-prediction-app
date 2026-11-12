@@ -37,3 +37,15 @@ def hist_race(season, rnd, rows, circuit_id="c", day=None):
                for i, (d, t, f) in enumerate(rows)]
     return HistoricRace(season=season, round=rnd, circuit_id=circuit_id,
                         date=day or date(season, 1 + rnd % 11, 1), lat=0.0, lon=0.0, results=results)
+
+
+def make_agg(season=2027, rnd=1, circuit="c", **kw):
+    """Minimalny RaceAggregates do testów czynników; pola nadpisujesz przez kw."""
+    from datetime import datetime, timezone
+    from schemas import RaceAggregates
+
+    base = dict(season=season, round=rnd, circuit_id=circuit, computed_at=datetime(2027, 1, 1, tzinfo=timezone.utc),
+                quali_gap={}, pit_delta={}, race_pace={}, tyre_deg={}, track_deg=None, air_temp_c=None,
+                track_temp_c=None, official_grid=None, sources={"jolpica": "ok", "openf1": "ok"})
+    base.update(kw)
+    return RaceAggregates(**base)

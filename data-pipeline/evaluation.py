@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from statistics import mean
 from typing import TYPE_CHECKING
@@ -20,7 +21,7 @@ from factors.reliability import dnf_rates
 from factors.track_profile import load_estimates
 from factors.track_stats import compute_track_stats, default_track_stats
 from fetch.jolpica import JolpicaError
-from schemas import DriverEntry, DriverProbability, Race, RaceEvaluation, TrackStats
+from schemas import DriverEntry, DriverProbability, Race, RaceAggregates, RaceEvaluation, TrackStats
 from simulate.race import apply_early_season, simulate_race
 from simulate.strategy import predict_strategy
 
@@ -69,7 +70,8 @@ class _Precomputed:
         return self._scores
 
 
-def prepare_rounds(season: int, clients: "Clients", calendar: list[Race] | None = None) -> list[RoundCase]:
+def prepare_rounds(season: int, clients: "Clients", calendar: list[Race] | None = None,
+                   aggregates: Sequence[RaceAggregates] = ()) -> list[RoundCase]:
     j = clients.jolpica
     calendar = calendar if calendar is not None else j.calendar(season)
     by_round = {r.round: r for r in calendar}
@@ -91,12 +93,14 @@ def prepare_rounds(season: int, clients: "Clients", calendar: list[Race] | None 
         circuit_history = [h for h in past if h.circuit_id == race.circuit_id]
         grid = {r.driver_id: r.grid for r in result.results}
         pre = build_context(race, entries, history_pool, circuit_history, wet, None, None, grid,
-                            default_track_stats([], season), None, profiles, as_of_round=result.round)
+                            default_track_stats([], season), None, profiles, as_of_round=result.round,
+                            aggregates=aggregates)
         track = compute_track_stats(race.circuit_id, pre.circuit_history, None, season,
                                     config.TRACK_OVERRIDES.get(race.circuit_id),
                                     default_track_stats(pre.history + pre.circuit_history, season))
         ctx = build_context(race, entries, history_pool, circuit_history, wet, None, None, grid, track,
-                            profiles.get(race.circuit_id), profiles, as_of_round=result.round)
+                            profiles.get(race.circuit_id), profiles, as_of_round=result.round,
+                            aggregates=aggregates)
         dnf, sim_track = apply_early_season(dnf_rates(ctx), track, result.round)
         cases.append(RoundCase(
             round=result.round, ctx=ctx,
@@ -105,6 +109,17 @@ def prepare_rounds(season: int, clients: "Clients", calendar: list[Race] | None 
             actual_finish={r.driver_id: r.finish for r in result.results},
         ))
     return cases
+
+
+def prepare_seasons(seasons: list[int], clients: "Clients", aggregates: Sequence[RaceAggregates] = (),
+                    ) -> dict[int, list[RoundCase]]:
+    """Przypadki testu wstecznego dla wielu sezonów; sezon bez rozegranych wyścigów jest pomijany."""
+    by_season = {}
+    for season in seasons:
+        cases = prepare_rounds(season, clients, aggregates=aggregates)
+        if cases:
+            by_season[season] = cases
+    return by_season
 
 
 def score_rounds(cases: list[RoundCase], weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,

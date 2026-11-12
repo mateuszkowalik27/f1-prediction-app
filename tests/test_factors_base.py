@@ -51,3 +51,17 @@ def test_zscore_has_zero_mean_unit_variance():
     z = zscore({"a": 1.0, "b": 2.0, "c": 3.0})
     assert sum(z.values()) == pytest.approx(0.0)
     assert sum(v * v for v in z.values()) / 3 == pytest.approx(1.0)
+
+
+def test_aggregates_filtered_by_as_of_round_no_future_leak():
+    from factors.context import build_context
+    from helpers import make_agg, make_entries, make_race, make_track
+
+    aggs = [make_agg(2027, r) for r in range(1, 6)] + [make_agg(2026, 24)]
+    ctx = build_context(make_race(round=3), make_entries(("d1", "t1")), [], [], {}, None, None, None, make_track(),
+                        None, {}, as_of_round=3, aggregates=aggs)
+    assert [(a.season, a.round) for a in ctx.aggregates] == [(2026, 24), (2027, 1), (2027, 2)]
+
+
+def test_aggregates_default_to_empty():
+    assert make_ctx().aggregates == []
