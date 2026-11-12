@@ -12,6 +12,11 @@ describe('App', () => {
     expect(screen.getByText('F1 Prediction App')).toBeInTheDocument()
   })
 
+  it('shows the app version so you can tell whether the phone has the new one', () => {
+    render(<App />)
+    expect(screen.getByText(/^wersja /)).toBeInTheDocument()
+  })
+
   it('has exactly three tabs: Weekend, Klasyfikacje, Kalendarz (no Model tab)', () => {
     render(<App />)
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Weekend', 'Klasyfikacje', 'Kalendarz'])

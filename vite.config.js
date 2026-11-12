@@ -6,10 +6,13 @@ import { defineConfig } from 'vitest/config'
 process.env.TZ = 'America/New_York'
 
 export default defineConfig({
+  // Numer wersji pokazywany w aplikacji (na Vercelu skrót commita), żeby było widać, czy telefon ma nową wersję.
+  define: { __BUILD_ID__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7)) },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false, // rejestrację robi src/main.jsx (z samoczynnym sprawdzaniem nowości)
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon-v2.png'],
       manifest: {
         name: 'F1 Prediction App',
@@ -27,6 +30,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true, // nowa wersja aktywuje się od razu, bez czekania na zamknięcie wszystkich kart
+        clientsClaim: true, // i od razu przejmuje otwartą aplikację
         // Dane zawsze najpierw z sieci (świeże), a bez internetu ostatnia pobrana wersja.
         runtimeCaching: [
           {

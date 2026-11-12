@@ -25,6 +25,7 @@ export default function App() {
       <main role="tabpanel" id="panel" aria-labelledby={`tab-${active}`}>
         <Screen />
       </main>
+      <p className="muted small version">{`wersja ${__BUILD_ID__}`}</p>
       <nav className="tabbar" role="tablist" aria-label="Sekcje aplikacji">
         {TABS.map((tab) => (
           <button

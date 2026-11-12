@@ -92,3 +92,5 @@ td.num, th.num { text-align: right; }
 .weight .bar { width: 64px; }
 
 .badge { white-space: nowrap; }
+
+.version { text-align: center; margin: 24px 0 0; opacity: 0.7; }
