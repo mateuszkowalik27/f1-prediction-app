@@ -180,6 +180,7 @@ class StandingRow(BaseModel):
     position: int
     number: int | None = None    # numer startowy kierowcy (tylko w klasyfikacji kierowców)
     code: str | None = None      # trzyliterowy skrót kierowcy (ANT, HAM...), tylko w klasyfikacji kierowców
+    team_id: str | None = None   # zespół kierowcy (ostatni w sezonie), tylko w klasyfikacji kierowców
 
 
 class Standings(BaseModel):

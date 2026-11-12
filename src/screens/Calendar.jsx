@@ -18,6 +18,7 @@ function RoundSessions({ race }) {
       nameById={Object.fromEntries(drivers.map((d) => [d.id, d.name]))}
       numberById={Object.fromEntries(drivers.map((d) => [d.id, d.number]))}
       codeById={Object.fromEntries(drivers.map((d) => [d.id, d.code]))}
+      teamById={Object.fromEntries(drivers.map((d) => [d.id, d.team_id]))}
     />
   )
 }

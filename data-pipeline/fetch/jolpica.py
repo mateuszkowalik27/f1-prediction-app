@@ -202,6 +202,7 @@ class JolpicaClient:
                 points=float(r["points"]), wins=int(r["wins"]), position=int(r["position"]),
                 number=int(r["Driver"]["permanentNumber"]) if str(r["Driver"].get("permanentNumber", "")).isdigit() else None,
                 code=r["Driver"].get("code"),
+                team_id=r["Constructors"][-1]["constructorId"] if r.get("Constructors") else None,
             )
             for r in (d[0]["DriverStandings"] if d else [])
         ]

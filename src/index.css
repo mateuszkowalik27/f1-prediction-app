@@ -9,6 +9,7 @@
   --good: #1a7f4b;
   --warn: #b26a00;
   --radius: 14px;
+  --logo-invert: 0;   /* jasny motyw: logo zespołu ciemne; w ciemnym motywie białe */
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -22,6 +23,7 @@
     --accent: #ff3b30;
     --good: #43c07f;
     --warn: #f0a63a;
+    --logo-invert: 1;
   }
 }
 
@@ -111,4 +113,10 @@ table.results th:nth-child(2), table.results td:nth-child(2) { position: sticky;
 table.results td, table.results th { white-space: nowrap; }
 table.results td, table.results th { padding: 5px 3px; }
 table.results td:nth-child(2) { white-space: nowrap; }
-table.results .car-no { margin-right: 5px; }
+table.results .car-no { margin-right: 0; }
+/* komórka kierowcy: numer (kolor zespołu), logo (białe), dwa wiersze nazwy */
+.driver { display: inline-flex; align-items: center; gap: 7px; }
+.team-logo { width: 24px; height: 16px; object-fit: contain; flex: none; filter: brightness(0) invert(var(--logo-invert, 1)); }
+.driver-names { display: flex; flex-direction: column; line-height: 1.15; }
+.driver-name { font-size: 0.95rem; font-weight: 500; }
+.driver-code { font-size: 0.68rem; font-weight: 400; color: var(--muted); letter-spacing: 0.04em; opacity: 0.85; }

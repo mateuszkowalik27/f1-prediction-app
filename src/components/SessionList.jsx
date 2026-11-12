@@ -4,7 +4,7 @@ import { formatWarsaw } from '../lib/time.js'
 import ResultsTable from './ResultsTable.jsx'
 
 // `results`: { [nazwaSesji]: { kind, rows } } albo null. Sesja z wynikami dostaje przycisk "Wyniki".
-export default function SessionList({ sessions, results = null, nameById, numberById, codeById }) {
+export default function SessionList({ sessions, results = null, nameById, numberById, codeById, teamById }) {
   const [open, setOpen] = useState(null)
   return (
     <ul className="list">
@@ -28,7 +28,7 @@ export default function SessionList({ sessions, results = null, nameById, number
                 )}
               </span>
             </div>
-            {table && expanded && <ResultsTable table={table} nameById={nameById} numberById={numberById} codeById={codeById} />}
+            {table && expanded && <ResultsTable table={table} nameById={nameById} numberById={numberById} codeById={codeById} teamById={teamById} />}
           </li>
         )
       })}
