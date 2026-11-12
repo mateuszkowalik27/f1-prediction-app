@@ -1,0 +1,74 @@
+import math
+
+import pytest
+
+import config
+from helpers import make_track
+from simulate.race import apply_early_season, simulate_race
+
+DRIVERS = ["a", "b", "c", "d", "e", "f"]
+EQUAL = {d: 0.0 for d in DRIVERS}
+GRID = {d: i + 1 for i, d in enumerate(DRIVERS)}
+NO_DNF = {d: 0.0 for d in DRIVERS}
+
+
+def run(strength=EQUAL, grid=GRID, difficulty=0.5, dnf=NO_DNF, stops=2, n=4000, seed=1):
+    return {p.driver_id: p for p in simulate_race(strength, grid, make_track(difficulty), dnf, stops, n=n, seed=seed)}
+
+
+def test_pole_matters_more_on_monaco_than_monza():
+    monaco = run(difficulty=0.9)["a"].win
+    monza = run(difficulty=0.1)["a"].win
+    assert monaco > monza + 0.05
+    assert monaco > 1 / len(DRIVERS)
+
+
+def test_win_probabilities_sum_to_one():
+    result = run()
+    assert sum(p.win for p in result.values()) == pytest.approx(1.0)
+    for p in result.values():
+        assert sum(p.position_distribution) == pytest.approx(1.0)
+
+
+def test_dnf_probability_one_scores_zero():
+    p = run(dnf={**NO_DNF, "a": 1.0})["a"]
+    assert (p.win, p.podium, p.points, p.expected_points) == (0.0, 0.0, 0.0, 0.0)
+    assert p.position_distribution[-1] == 1.0   # zawsze na końcu stawki
+
+
+def test_driver_missing_from_dnf_gets_average_and_no_nan():
+    dnf = {d: 0.1 for d in DRIVERS if d != "f"}
+    for p in run(dnf=dnf).values():
+        assert all(math.isfinite(v) for v in [p.win, p.podium, p.points, p.expected_points])
+        assert sum(p.position_distribution) == pytest.approx(1.0)
+
+
+def test_driver_missing_from_grid_starts_at_back():
+    strong = {**EQUAL, "f": 1.0}
+    with_grid = run(strength=strong, grid={**GRID, "f": 1}, difficulty=0.9)["f"].win
+    without = run(strength=strong, grid={d: g for d, g in GRID.items() if d != "f"}, difficulty=0.9)["f"].win
+    assert without < with_grid
+
+
+def test_works_with_22_drivers():
+    drivers = [f"d{i}" for i in range(22)]
+    result = simulate_race({d: 0.0 for d in drivers}, {d: i + 1 for i, d in enumerate(drivers)},
+                           make_track(0.5), {d: 0.0 for d in drivers}, 2, n=500, seed=3)
+    assert all(len(p.position_distribution) == 22 for p in result)
+    assert sum(p.win for p in result) == pytest.approx(1.0)
+
+
+def test_same_seed_same_result():
+    assert run(seed=5) == run(seed=5)
+    assert run(seed=5) != run(seed=6)
+
+
+def test_early_season_raises_risk_only_in_early_rounds():
+    track = make_track(0.5, sc=0.5)
+    dnf, early_track = apply_early_season({"a": 0.1, "b": 0.9}, track, round=2)
+    assert dnf["a"] == pytest.approx(0.1 * config.EARLY_SEASON_RISK_MULTIPLIER)
+    assert dnf["b"] == 1.0                       # obcięte do 1
+    assert early_track.sc_probability == pytest.approx(0.5 * config.EARLY_SEASON_RISK_MULTIPLIER)
+    assert track.sc_probability == 0.5           # oryginał bez zmian
+    late_dnf, late_track = apply_early_season({"a": 0.1}, track, round=config.EARLY_SEASON_ROUNDS + 1)
+    assert late_dnf == {"a": 0.1} and late_track.sc_probability == 0.5
