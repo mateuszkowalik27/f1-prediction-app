@@ -19,7 +19,7 @@ def predict_qualifying(
     strength: dict[str, float],
     n: int = config.N_SIMULATIONS,
     seed: int = config.RANDOM_SEED,
-    noise: float = 0.8,
+    noise: float = config.QUALIFYING_NOISE,
 ) -> QualifyingPrediction:
     drivers = sorted(strength)
     count = len(drivers)

@@ -168,6 +168,11 @@ class ProfileCache(BaseModel):
     profiles: dict[str, TrackProfile]
 
 
+class WetCache(BaseModel):
+    """wet_cache.json: czy dany wyścig był mokry (klucz "sezon-runda"); pogoda z przeszłości się nie zmienia."""
+    flags: dict[str, bool]
+
+
 class WeekendPayload(BaseModel):
     race: Race
     weather: WeatherForecast | None

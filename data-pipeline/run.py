@@ -15,22 +15,19 @@ from pathlib import Path
 from typing import Callable
 
 import config
-from factors.base import RaceContext, combine
-from factors.car_pace import CarPace
-from factors.car_track_fit import CarTrackFit
-from factors.driver_form import DriverForm
-from factors.practice_pace import PracticePace, WeekendShift
-from factors.reliability import Reliability, dnf_rates
-from factors.track_history import TrackHistory
+from factors.base import combine
+from factors.context import build_context, race_from_history  # noqa: F401  (build_context eksportowany dla testów)
+from factors.registry import ALL_FACTORS
+from factors.reliability import dnf_rates
 from factors.track_profile import get_profile, load_estimates
 from factors.track_stats import compute_track_stats, default_track_stats
-from factors.wet_skill import WetSkill
+from evaluation import evaluate_season
 from fetch.jolpica import JolpicaClient, JolpicaError
 from fetch.openf1 import OpenF1Client
 from fetch.openmeteo import fetch_forecast, wet_races
 from schemas import (
     Calendar, DriverEntry, DriverProbability, HistoricRace, Meta, ModelPayload, ProfileCache, Race,
-    SafetyCarOdds, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse,
+    SafetyCarOdds, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse, WetCache,
     WeightsFile,
 )
 from simulate.qualifying import predict_qualifying
@@ -102,27 +99,6 @@ def _actual_quali_rows(grid: dict[str, int], drivers: list[str]) -> list[DriverP
     return rows
 
 
-# --- kontekst ---
-def build_context(race, entries, history, circuit_history, wet, weather, practice, grid, track, profile,
-                  profiles, as_of_round: int) -> RaceContext:
-    """Kontekst predykcji bez wyników z rundy `as_of_round` i późniejszych (ważne dla testu wstecznego)."""
-    def before(h: HistoricRace) -> bool:
-        return (h.season, h.round) < (race.season, as_of_round)
-
-    return RaceContext(
-        race=race, entries=entries, track=track, season=race.season,
-        history=[h for h in history if before(h) and h.results],
-        circuit_history=[h for h in circuit_history if before(h) and h.results],
-        wet=wet, weather=weather, practice=practice, grid=grid, profile=profile, profiles=profiles,
-    )
-
-
-def _race_from_history(h: HistoricRace) -> Race:
-    return Race(season=h.season, round=h.round, name=f"{h.season} R{h.round}", circuit_id=h.circuit_id,
-                country="", lat=h.lat, lon=h.lon, is_sprint=False,
-                sessions=[Session(name="Race", start_utc=datetime.combine(h.date, time(13, 0), tzinfo=timezone.utc))])
-
-
 def _collect_profiles(openf1, needed: dict[str, Race], cache: dict[str, TrackProfile], current: str):
     """Profile torów: nadpisanie > cache z telemetrii > świeża telemetria (limit na przebieg) > szacunek."""
     estimates = load_estimates()
@@ -163,16 +139,11 @@ def _load_model(path: Path, model_type):
 
 
 def _load_weights(out_dir: Path) -> WeightsFile:
-    defaults = {**config.FACTOR_WEIGHTS, "grid_base_weight": config.GRID_BASE_WEIGHT,
-                "race_noise_base": config.RACE_NOISE_BASE}
+    defaults = config.default_weights()
     stored = _load_model(out_dir / "weights.json", WeightsFile)
     if stored is None:
         return WeightsFile(weights=defaults, history=[])
     return WeightsFile(weights={**defaults, **stored.weights}, history=stored.history)
-
-
-FACTORS = [CarPace(), DriverForm(), TrackHistory(), PracticePace(), WeekendShift(), CarTrackFit(), WetSkill(),
-           Reliability()]
 
 
 def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Clients, weights: dict[str, float],
@@ -200,15 +171,15 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     track = compute_track_stats(race.circuit_id, circuit_history, safety, season,
                                 config.TRACK_OVERRIDES.get(race.circuit_id),
                                 default_track_stats(history + circuit_history, season))
-    needed = {h.circuit_id: _race_from_history(h) for h in history}
+    needed = {h.circuit_id: race_from_history(h) for h in history}
     # nadchodzący weekend nie ma jeszcze sesji: telemetrię dla tego toru bierzemy z jego ostatniego wyścigu
     last_here = max(circuit_history, key=lambda h: (h.season, h.round), default=None)
-    needed[race.circuit_id] = _race_from_history(last_here) if last_here else race
+    needed[race.circuit_id] = race_from_history(last_here) if last_here else race
     profiles, new_cache = _collect_profiles(f1, needed, profile_cache, race.circuit_id)
 
     ctx = build_context(race, entries, history, circuit_history, wet, weather, practice, None, track,
                         profiles.get(race.circuit_id), profiles, as_of_round=race.round)
-    combined = combine(ctx, FACTORS, weights)
+    combined = combine(ctx, ALL_FACTORS, weights)
     drivers = [e.driver_id for e in entries]
 
     quali = predict_qualifying(combined.strength)
@@ -218,7 +189,7 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     dnf, sim_track = apply_early_season(dnf_rates(replace(ctx, grid=grid)), track, race.round)
     strategy = predict_strategy(track, weather, tyre)
     race_rows = simulate_race(
-        combined.strength, grid, sim_track, dnf, strategy.primary.stops,
+        combined.strength, grid if grid_source == "actual" else None, sim_track, dnf, strategy.primary.stops,
         grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),
         noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
     )
@@ -233,8 +204,22 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     return payload, sources, new_cache
 
 
+def _cached_wet(wet_fn, flags: dict[str, bool]):
+    """Opakowuje wykrywanie mokrych wyścigów: odpytuje API tylko o wyścigi, których jeszcze nie znamy."""
+    def wet(races: list[HistoricRace]) -> dict[tuple[int, int], bool]:
+        missing = [h for h in races if f"{h.season}-{h.round}" not in flags]
+        if missing:
+            flags.update({f"{s}-{r}": v for (s, r), v in wet_fn(missing).items()})
+        return {(h.season, h.round): flags[f"{h.season}-{h.round}"]
+                for h in races if f"{h.season}-{h.round}" in flags}
+    return wet
+
+
 def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients) -> Meta:
     out_dir = Path(out_dir)
+    wet_stored = _load_model(out_dir / "wet_cache.json", WetCache)
+    wet_flags = dict(wet_stored.flags) if wet_stored else {}
+    clients = replace(clients, wet=_cached_wet(clients.wet, wet_flags))
     calendar = clients.jolpica.calendar(season)       # awaria Jolpica kończy się tu, zanim cokolwiek zapiszemy
     standings = clients.jolpica.standings(season)
     weights_file = _load_weights(out_dir)
@@ -253,8 +238,9 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
         used, skipped = payload.factors_used, payload.factors_skipped
 
     meta = Meta(generated_at=now_utc, season=season, data_sources=sources)
+    evaluation = evaluate_season(season, clients, weights_file.weights)
     model = ModelPayload(weights=weights_file.weights, weight_history=weights_file.history,
-                         factors_used=used, factors_skipped=skipped, evaluation=[])
+                         factors_used=used, factors_skipped=skipped, evaluation=evaluation)
 
     out_dir.mkdir(parents=True, exist_ok=True)         # wszystko policzone i zwalidowane: zapisujemy
     _write(out_dir / "calendar.json", Calendar(season=season, races=calendar))
@@ -263,6 +249,8 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
     _write(out_dir / "model.json", model)
     if new_cache != profile_cache:
         _write(out_dir / "track_profiles.json", ProfileCache(profiles=new_cache))
+    if wet_stored is None or wet_flags != wet_stored.flags:
+        _write(out_dir / "wet_cache.json", WetCache(flags=wet_flags))
     _write(out_dir / "meta.json", meta)
     return meta
 

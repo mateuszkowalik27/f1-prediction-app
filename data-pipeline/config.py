@@ -17,8 +17,12 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "wet_skill": 0.05,
     "reliability": 0.10,
 }
-GRID_BASE_WEIGHT = 0.15   # ile tempa kosztuje jedno miejsce na starcie (na torze o trudności 1)
-RACE_NOISE_BASE = 1.0     # poziom losowości wyścigu
+# Dostrojone testem wstecznym na sezonie 2026 (rundy 1-20, siatka znana, 10 000 symulacji; próbka uczona = oceniana,
+# dlatego wybrano płaski fragment, a nie skrajny punkt). Błąd Briera zwycięzcy: 0,0361 -> 0,0246 (losowo: 0,0434);
+# poprawa jest taka sama w obu połówkach sezonu (R1-10: 0,0356 -> 0,0229, R11-20: 0,0367 -> 0,0263).
+GRID_BASE_WEIGHT = 0.9    # ile tempa kosztuje jedno miejsce na starcie (na torze o trudności 1)
+RACE_NOISE_BASE = 0.5     # poziom losowości wyścigu
+QUALIFYING_NOISE = 0.8    # losowość kwalifikacji (jeszcze niedostrojona: brak historycznych wyników kwalifikacji w teście)
 SC_NOISE_FACTOR = 0.5     # ile chaosu dodaje wysokie ryzyko safety cara
 PIT_NOISE = 0.1           # ile chaosu dodaje każdy pit-stop
 
@@ -31,8 +35,8 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "car_track_fit": (0.01, 0.15),
     "wet_skill": (0.01, 0.15),
     "reliability": (0.02, 0.25),
-    "grid_base_weight": (0.05, 0.40),
-    "race_noise_base": (0.5, 2.0),
+    "grid_base_weight": (0.3, 1.6),
+    "race_noise_base": (0.3, 1.5),
 }
 LOCKED_WEIGHTS: set[str] = set()   # wagi, których robot nie rusza
 TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
@@ -67,3 +71,8 @@ FORM_HALF_LIFE_ROUNDS = 8   # co ile rund wynik traci połowę wagi (siła bolid
 FORM_RACES = 5              # ile ostatnich rund liczy się do formy kierowcy
 DNF_PRIOR_STRENGTH = 5      # jak mocno ściągamy wskaźnik awarii ku średniej przy małej próbie
 DEFAULT_DNF_RATE = 0.08     # gdy nie ma jeszcze żadnych wyników
+
+
+def default_weights() -> dict[str, float]:
+    """Wagi czynników oraz siła startu i poziom losowości: punkt wyjścia dla auto-wag."""
+    return {**FACTOR_WEIGHTS, "grid_base_weight": GRID_BASE_WEIGHT, "race_noise_base": RACE_NOISE_BASE}

@@ -72,3 +72,20 @@ def test_early_season_raises_risk_only_in_early_rounds():
     assert track.sc_probability == 0.5           # oryginał bez zmian
     late_dnf, late_track = apply_early_season({"a": 0.1}, track, round=config.EARLY_SEASON_ROUNDS + 1)
     assert late_dnf == {"a": 0.1} and late_track.sc_probability == 0.5
+
+
+def test_unknown_grid_is_sampled_so_favourite_is_less_certain():
+    strength = {"a": 1.0, "b": 0.5, "c": 0.0, "d": -0.5, "e": -1.0, "f": -1.5}
+    track = make_track(0.9)
+    fixed = simulate_race(strength, {d: i + 1 for i, d in enumerate(strength)}, track, NO_DNF, 2, n=4000, seed=1)
+    sampled = simulate_race(strength, None, track, NO_DNF, 2, n=4000, seed=1)
+    win = lambda rows: {p.driver_id: p.win for p in rows}
+    assert win(sampled)["a"] < win(fixed)["a"]                       # niepewna siatka = mniej pewny faworyt
+    assert sum(win(sampled).values()) == pytest.approx(1.0)
+    assert all(sum(p.position_distribution) == pytest.approx(1.0) for p in sampled)
+
+
+def test_unknown_grid_same_seed_same_result():
+    strength = {"a": 1.0, "b": 0.0, "c": -1.0}
+    one = simulate_race(strength, None, make_track(0.5), {}, 2, n=500, seed=3)
+    assert one == simulate_race(strength, None, make_track(0.5), {}, 2, n=500, seed=3)
