@@ -230,6 +230,12 @@ class WetCache(BaseModel):
     flags: dict[str, bool]
 
 
+class GridPenalty(BaseModel):
+    driver_id: str
+    from_pos: int     # pozycja w kwalifikacjach
+    to_pos: int       # pozycja na starcie wyścigu (po karze lub starcie z alei serwisowej)
+
+
 class WeekendPayload(BaseModel):
     race: Race
     weather: WeatherForecast | None
@@ -241,6 +247,8 @@ class WeekendPayload(BaseModel):
     factors_skipped: list[str]
     low_data: bool
     lineup: Literal["qualifying", "latest_race", "previous_season"] = "latest_race"   # skąd lista kierowców
+    grid_source: Literal["official", "qualifying", "predicted"] = "predicted"            # skąd siatka startowa
+    penalties: list[GridPenalty] = []                                                      # kto spadł na siatce względem kwalifikacji
     track_source: Literal["computed", "default", "manual"] = "default"                 # skąd statystyki toru
     track_sample_size: int = 0
     profile_source: Literal["telemetry", "estimate", "manual"] | None = None           # skąd profil zakrętów

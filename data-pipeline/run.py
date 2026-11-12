@@ -32,7 +32,7 @@ from fetch.openmeteo import fetch_forecast, wet_races
 from optional import optional as _optional
 from schemas import (
     Calendar, DriverEntry, DriverProbability, FrozenPrediction, HistoricRace, Meta, ModelPayload, ProfileCache, Race,
-    SafetyCarOdds, SeasonScore, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse, WetCache,
+    GridPenalty, SafetyCarOdds, SeasonScore, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse, WetCache,
     WeightsFile,
 )
 from simulate.qualifying import predict_qualifying
@@ -102,6 +102,34 @@ def actual_qualifying(race: Race, now_utc: datetime, jolpica) -> tuple[dict[str,
         return jolpica.qualifying_result(race.season, race.round)
     except JolpicaError:
         return None
+
+
+@dataclass(frozen=True)
+class StartGrid:
+    grid: dict[str, int]            # siatka startowa wyścigu (z karami, gdy ją znamy)
+    quali: dict[str, int]           # klasyfikacja kwalifikacji (bez kar)
+    entries: list[DriverEntry]
+    source: str                     # "official" | "qualifying"
+    penalties: list[GridPenalty]
+
+
+def resolve_start_grid(race: Race, now_utc: datetime, clients: Clients) -> StartGrid | None:
+    """None przed kwalifikacjami. Po nich: oficjalna siatka z kar (OpenF1), a gdy jej brak lub źródło zawiodło,
+    kolejność kwalifikacji. Kierowca bez miejsca w oficjalnej siatce (start z alei) trafia na koniec."""
+    base = actual_qualifying(race, now_utc, clients.jolpica)
+    if not base:
+        return None
+    quali, entries = base
+    official, _ = _optional("siatka startowa (OpenF1)", clients.openf1.starting_grid, race, entries)
+    if not official:
+        return StartGrid(quali, quali, entries, "qualifying", [])
+    known = {e.driver_id for e in entries}
+    ordered = sorted((d for d in official if d in known), key=lambda d: official[d])
+    ordered += sorted((d for d in quali if d not in ordered), key=lambda d: quali[d])
+    grid = {d: i + 1 for i, d in enumerate(ordered)}
+    penalties = [GridPenalty(driver_id=d, from_pos=quali[d], to_pos=grid[d])
+                 for d in sorted(grid, key=grid.get) if d in quali and grid[d] > quali[d]]
+    return StartGrid(grid, quali, entries, "official", penalties)
 
 
 def _actual_quali_rows(grid: dict[str, int], drivers: list[str]) -> list[DriverProbability]:
@@ -180,9 +208,9 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     if latest:  # klasyfikacja zawiera też kierowców, którzy już nie jadą (zastępstwa): bierzemy ostatnią stawkę
         active = {r.driver_id for r in latest.results}
         entries = [e for e in entries if e.driver_id in active] or entries
-    actual = actual_qualifying(race, now_utc, j)
-    if actual:  # po kwalifikacjach znamy prawdziwy skład (także zastępstwa) i siatkę
-        actual_grid, entries = actual
+    start_grid = resolve_start_grid(race, now_utc, clients)
+    if start_grid:  # po kwalifikacjach znamy prawdziwy skład (także zastępstwa) i siatkę (z karami)
+        actual_grid, entries = start_grid.grid, start_grid.entries
         lineup = "qualifying"
     else:
         actual_grid = None
@@ -210,7 +238,7 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     drivers = [e.driver_id for e in entries]
 
     quali = predict_qualifying(combined.strength)
-    quali_rows = _actual_quali_rows(actual_grid, drivers) if actual_grid else quali.probabilities
+    quali_rows = _actual_quali_rows(start_grid.quali, drivers) if start_grid else quali.probabilities
     dnf, sim_track = apply_early_season(dnf_rates(ctx), track, race.round)
     strategy = predict_strategy(track, weather, tyre)
     race_rows = simulate_race(   # bez siatki (przed kwalifikacjami) losujemy ją w każdej symulacji
@@ -229,7 +257,8 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
         qualifying=quali_rows, race_prediction=race_rows,
         factors_used=combined.used, factors_skipped=combined.skipped,
         low_data=combined.low_data or sources["openf1"] != "ok",   # brak OpenF1 = mało danych (spec §3)
-        lineup=lineup, track_source=track.source, track_sample_size=track.sample_size,
+        lineup=lineup, grid_source=start_grid.source if start_grid else "predicted",
+        penalties=start_grid.penalties if start_grid else [], track_source=track.source, track_sample_size=track.sample_size,
         profile_source=profile.source if profile else None,
     )
     return payload, sources, new_cache
@@ -322,7 +351,8 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
         payload, extra, new_cache = _predict_weekend(race, season, now_utc, clients, weights_file.weights, profile_cache,
                                                      aggregates)
         calibration = load_calibration(out_dir / "calibration.json")
-        if calibration and calibration.tau != 1.0:   # kalibracja szans na wygraną dopasowana poza próbką
+        # kalibracja była dopasowana na przewidywaniach ze znaną siatką: przed kwalifikacjami (siatka losowana) jej nie stosujemy
+        if calibration and calibration.tau != 1.0 and payload.grid_source != "predicted":
             payload = payload.model_copy(update={"race_prediction": apply_tau(payload.race_prediction, calibration.tau)})
         weekend = WeekendResponse(status="ok", payload=payload)
         sources.update(extra)

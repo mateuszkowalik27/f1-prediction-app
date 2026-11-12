@@ -316,15 +316,15 @@ def test_aggregates_reach_the_context_without_future_rounds(tmp_path, monkeypatc
     assert [(a.season, a.round) for a in seen[0]] == [(2026, 24), (2027, 1), (2027, 2)]
 
 
-def test_calibration_file_changes_win_but_keeps_sum_one(tmp_path):
+def test_calibration_file_changes_win_but_keeps_sum_one(tmp_path):   # po kwalifikacjach: znana siatka
     from datetime import datetime, timezone
     from schemas import Calibration
 
-    run_pipeline(tmp_path, 2027, NOW, clients())
+    run_pipeline(tmp_path, 2027, AFTER_QUALI, clients(grid=QUALI_GRID))
     before = read(tmp_path, "weekend.json", WeekendResponse).payload.race_prediction
     (tmp_path / "calibration.json").write_text(
         Calibration(tau=0.6, n_races=90, fitted_at=datetime(2026, 11, 12, tzinfo=timezone.utc)).model_dump_json())
-    run_pipeline(tmp_path, 2027, NOW, clients())
+    run_pipeline(tmp_path, 2027, AFTER_QUALI, clients(grid=QUALI_GRID))
     after = read(tmp_path, "weekend.json", WeekendResponse).payload.race_prediction
     top = max(before, key=lambda p: p.win).driver_id
     win = lambda rows, d: next(p.win for p in rows if p.driver_id == d)
@@ -352,3 +352,77 @@ def test_jolpica_failure_in_backfill_leaves_files_untouched_and_exits_1(tmp_path
         (tmp_path / n).write_text("OLD")
     assert main(["--out", str(tmp_path), "--season", "2027"], clients=clients(fail_quali_times=True)) == 1
     assert all((tmp_path / n).read_text() == "OLD" for n in names)
+
+
+# --- oficjalna siatka z karami (model v2) ---
+AFTER_QUALI = datetime(2027, 4, 10, 18, 0, tzinfo=UTC)
+QUALI_GRID = {"d3": 1, "d1": 2, "d2": 3, "d4": 4}
+
+
+def start_grid(official=None, **kw):
+    from run import resolve_start_grid
+    c = clients(grid=QUALI_GRID, openf1=FakeOpenF1(grid=official), **kw)
+    return resolve_start_grid(CALENDAR[2], AFTER_QUALI, c)
+
+
+def test_no_start_grid_before_qualifying():
+    from run import resolve_start_grid
+    assert resolve_start_grid(CALENDAR[2], NOW, clients(grid=QUALI_GRID, openf1=FakeOpenF1())) is None
+
+
+def test_qualifying_only_when_openf1_has_no_grid():
+    g = start_grid(None)
+    assert g.source == "qualifying" and g.grid == QUALI_GRID and g.penalties == []
+
+
+def test_official_grid_with_penalty_lists_the_change_and_is_used():
+    from schemas import GridPenalty
+    g = start_grid({"d1": 1, "d2": 2, "d4": 3, "d3": 4})        # pole sitter d3 ukarany z 1. na 4. miejsce
+    assert g.source == "official" and g.grid == {"d1": 1, "d2": 2, "d4": 3, "d3": 4}
+    assert g.penalties == [GridPenalty(driver_id="d3", from_pos=1, to_pos=4)]    # tylko ukarany, nie ci, którzy awansowali
+    assert g.quali == QUALI_GRID                                                 # kwalifikacje bez kar zostają do pokazania
+
+
+def test_pit_lane_starter_is_placed_after_the_last_driver():
+    g = start_grid({"d3": 1, "d2": 2, "d4": 3})                 # d1 startuje z alei: brak w oficjalnej siatce
+    assert g.grid["d1"] == 4 and sorted(g.grid.values()) == [1, 2, 3, 4]
+
+
+def test_driver_unknown_to_the_lineup_is_ignored_without_crash():
+    g = start_grid({"ghost": 1, "d3": 2, "d1": 3, "d2": 4, "d4": 5})
+    assert set(g.grid) == {"d1", "d2", "d3", "d4"} and sorted(g.grid.values()) == [1, 2, 3, 4]
+
+
+def test_openf1_failure_falls_back_to_qualifying():
+    from run import resolve_start_grid
+    g = resolve_start_grid(CALENDAR[2], AFTER_QUALI, clients(grid=QUALI_GRID, openf1=FakeOpenF1(broken=True)))
+    assert g.source == "qualifying" and g.grid == QUALI_GRID
+
+
+def test_penalized_pole_sitter_wins_less_often(tmp_path):
+    sub_clients = lambda official: clients(grid=QUALI_GRID, openf1=FakeOpenF1(grid=official))
+    a, b = tmp_path / "a", tmp_path / "b"
+    run_pipeline(a, 2027, AFTER_QUALI, sub_clients(None))
+    run_pipeline(b, 2027, AFTER_QUALI, sub_clients({"d1": 1, "d2": 2, "d4": 3, "d3": 4}))
+    win = lambda out: {p.driver_id: p.win for p in read(out, "weekend.json", WeekendResponse).payload.race_prediction}
+    assert win(b)["d3"] < win(a)["d3"]
+    assert sum(win(b).values()) == pytest.approx(1.0, abs=0.05)
+
+
+def test_weekend_payload_reports_grid_source_and_penalties(tmp_path):
+    run_pipeline(tmp_path, 2027, AFTER_QUALI, clients(grid=QUALI_GRID, openf1=FakeOpenF1(grid={"d1": 1, "d2": 2, "d4": 3, "d3": 4})))
+    payload = read(tmp_path, "weekend.json", WeekendResponse).payload
+    assert payload.grid_source == "official" and [(p.driver_id, p.from_pos, p.to_pos) for p in payload.penalties] == [("d3", 1, 4)]
+    run_pipeline(tmp_path, 2027, NOW, clients())
+    assert read(tmp_path, "weekend.json", WeekendResponse).payload.grid_source == "predicted"
+
+
+def test_calibration_is_not_applied_before_the_grid_is_known(tmp_path):
+    from schemas import Calibration
+    plain, calibrated = tmp_path / "plain", tmp_path / "cal"
+    calibrated.mkdir()
+    (calibrated / "calibration.json").write_text(Calibration(tau=0.6, n_races=90, fitted_at=datetime(2026, 11, 12, tzinfo=UTC)).model_dump_json())
+    run_pipeline(plain, 2027, NOW, clients())
+    run_pipeline(calibrated, 2027, NOW, clients())
+    win = lambda out: [round(p.win, 9) for p in read(out, "weekend.json", WeekendResponse).payload.race_prediction]
+    assert win(plain) == win(calibrated)                        # przed kwalifikacjami kalibracja nie działa
