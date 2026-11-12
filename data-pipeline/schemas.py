@@ -52,6 +52,15 @@ class TrackProfile(BaseModel):
         return self
 
 
+class TrackStats(BaseModel):
+    circuit_id: str
+    overtaking_difficulty: float  # 0 = łatwo wyprzedzać, 1 = prawie się nie da
+    sc_probability: float
+    vsc_probability: float
+    sample_size: int
+    source: Literal["computed", "default", "manual"]
+
+
 class TrackOverride(BaseModel):
     overtaking_difficulty: float | None = None
     sc_probability: float | None = None
