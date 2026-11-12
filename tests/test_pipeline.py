@@ -289,3 +289,66 @@ def test_predictions_are_frozen_before_the_race_and_scored_after_it(tmp_path):
     run_pipeline(tmp_path, 2027, after, clients(completed=3))
     assert frozen.read_text() == before_text                                # po starcie nie nadpisujemy
     assert [e.round for e in read(tmp_path, "model.json", ModelPayload).live_evaluation] == [3]
+
+
+# --- model v2: historia, kalibracja, ocena poza próbką ---
+def test_pipeline_backfills_up_to_budget_each_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "BACKFILL_RACES_PER_RUN", 2)
+    run_pipeline(tmp_path, 2027, NOW, clients())
+    assert len(list((tmp_path / "history").glob("*.json"))) == 2
+    run_pipeline(tmp_path, 2027, NOW, clients())
+    assert len(list((tmp_path / "history").glob("*.json"))) == 4        # 2026: R23, R24; 2027: R1, R2
+
+
+def test_aggregates_reach_the_context_without_future_rounds(tmp_path, monkeypatch):
+    import run as run_module
+    from helpers import make_agg
+    from history_store import HistoryStore
+
+    monkeypatch.setattr(config, "BACKFILL_RACES_PER_RUN", 0)           # tylko to, co wstawimy ręcznie
+    store = HistoryStore(tmp_path / "history")
+    for season, rnd in [(2026, 24), (2027, 1), (2027, 2), (2027, 3), (2027, 4)]:
+        store.save(make_agg(season, rnd))
+    seen = []
+    original = run_module.combine
+    monkeypatch.setattr(run_module, "combine", lambda ctx, factors, weights: seen.append(ctx.aggregates) or original(ctx, factors, weights))
+    run_pipeline(tmp_path, 2027, NOW, clients())                        # przewidujemy rundę 3
+    assert [(a.season, a.round) for a in seen[0]] == [(2026, 24), (2027, 1), (2027, 2)]
+
+
+def test_calibration_file_changes_win_but_keeps_sum_one(tmp_path):
+    from datetime import datetime, timezone
+    from schemas import Calibration
+
+    run_pipeline(tmp_path, 2027, NOW, clients())
+    before = read(tmp_path, "weekend.json", WeekendResponse).payload.race_prediction
+    (tmp_path / "calibration.json").write_text(
+        Calibration(tau=0.6, n_races=90, fitted_at=datetime(2026, 11, 12, tzinfo=timezone.utc)).model_dump_json())
+    run_pipeline(tmp_path, 2027, NOW, clients())
+    after = read(tmp_path, "weekend.json", WeekendResponse).payload.race_prediction
+    top = max(before, key=lambda p: p.win).driver_id
+    win = lambda rows, d: next(p.win for p in rows if p.driver_id == d)
+    assert win(after, top) < win(before, top)                           # tau < 1 spłaszcza faworyta
+    assert sum(p.win for p in after) == pytest.approx(1.0)
+
+
+def test_oos_file_is_copied_into_model_json(tmp_path):
+    (tmp_path / "oos.json").write_text('[{"season": 2025, "brier": 0.0251}, {"season": 2026, "brier": 0.0243}]')
+    run_pipeline(tmp_path, 2027, NOW, clients())
+    model = read(tmp_path, "model.json", ModelPayload)
+    assert [(s.season, s.brier) for s in model.out_of_sample] == [(2025, 0.0251), (2026, 0.0243)]
+
+
+def test_openf1_exception_during_backfill_does_not_abort_and_leaves_no_partial_file(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients(openf1=FakeOpenF1(broken=True)))
+    assert read(tmp_path, "weekend.json", WeekendResponse).status == "ok"
+    history = tmp_path / "history"
+    assert not history.exists() or (not list(history.glob("*.json")) and not list(history.glob("*.tmp")))
+
+
+def test_jolpica_failure_in_backfill_leaves_files_untouched_and_exits_1(tmp_path):
+    names = ["meta.json", "calendar.json", "standings.json", "weekend.json", "model.json"]
+    for n in names:
+        (tmp_path / n).write_text("OLD")
+    assert main(["--out", str(tmp_path), "--season", "2027"], clients=clients(fail_quali_times=True)) == 1
+    assert all((tmp_path / n).read_text() == "OLD" for n in names)

@@ -272,6 +272,7 @@ class ModelPayload(BaseModel):
     factors_skipped: list[str]
     evaluation: list[RaceEvaluation]
     live_evaluation: list[RaceEvaluation] = []     # ocena przewidywań, które użytkownik faktycznie widział
+    out_of_sample: list[SeasonScore] = []          # Brier poza próbką (public/data/oos.json, liczony ręcznie)
 
 
 class Meta(BaseModel):

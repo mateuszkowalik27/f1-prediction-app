@@ -7,6 +7,7 @@ nie jest nadpisany i kod wyjścia 1. Brak opcjonalnych źródeł (OpenF1, Open-M
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from dataclasses import dataclass, replace
@@ -15,6 +16,8 @@ from pathlib import Path
 from typing import Callable
 
 import config
+from backfill import ensure_aggregates
+from calibration import apply_tau, load_calibration
 from factors.base import combine
 from factors.context import build_context, race_from_history  # noqa: F401  (build_context eksportowany dla testów)
 from factors.registry import ALL_FACTORS
@@ -23,12 +26,13 @@ from factors.track_profile import get_profile, load_estimates
 from factors.track_stats import compute_track_stats, default_track_stats
 from evaluation import RoundCase, evaluate, prepare_rounds, score_rounds
 from fetch.jolpica import JolpicaClient, JolpicaError
+from history_store import HistoryStore
 from fetch.openf1 import OpenF1Client
 from fetch.openmeteo import fetch_forecast, wet_races
 from optional import optional as _optional
 from schemas import (
     Calendar, DriverEntry, DriverProbability, FrozenPrediction, HistoricRace, Meta, ModelPayload, ProfileCache, Race,
-    SafetyCarOdds, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse, WetCache,
+    SafetyCarOdds, SeasonScore, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse, WetCache,
     WeightsFile,
 )
 from simulate.qualifying import predict_qualifying
@@ -160,7 +164,7 @@ def _load_weights(out_dir: Path) -> WeightsFile:
 
 
 def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Clients, weights: dict[str, float],
-                     profile_cache: dict[str, TrackProfile]):
+                     profile_cache: dict[str, TrackProfile], aggregates=()):
     j, f1 = clients.jolpica, clients.openf1
     entries: list[DriverEntry] = j.entries(season)
     lineup = "latest_race"
@@ -201,7 +205,7 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     profiles, new_cache = _collect_profiles(f1, needed, profile_cache, race.circuit_id)
 
     ctx = build_context(race, entries, history, circuit_history, wet, weather, practice, None, track,
-                        profiles.get(race.circuit_id), profiles, as_of_round=race.round)
+                        profiles.get(race.circuit_id), profiles, as_of_round=race.round, aggregates=aggregates)
     combined = combine(ctx, ALL_FACTORS, weights)
     drivers = [e.driver_id for e in entries]
 
@@ -229,6 +233,25 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
         profile_source=profile.source if profile else None,
     )
     return payload, sources, new_cache
+
+
+def _load_oos(out_dir: Path) -> list[SeasonScore]:
+    try:
+        return [SeasonScore(**row) for row in json.loads((out_dir / "oos.json").read_text(encoding="utf-8"))]
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def _backfill_history(store: HistoryStore, clients: Clients, season: int) -> None:
+    """Uzupełnia historię agregatów w ramach budżetu. Awaria Jolpica przerywa przebieg (jak wszędzie),
+    inny błąd tylko pomija uzupełnianie: to dodatek, nie warunek działania."""
+    try:
+        ensure_aggregates(store, clients, list(range(config.FIRST_BACKFILL_SEASON, season + 1)),
+                          config.BACKFILL_RACES_PER_RUN)
+    except JolpicaError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        print(f"UWAGA: uzupełnianie historii nie zadziałało ({type(exc).__name__}: {exc}); pomijam.", file=sys.stderr)
 
 
 def _live_evaluation(out_dir: Path, season: int, cases: list[RoundCase]):
@@ -281,7 +304,10 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
     else:  # nowy sezon bez wyników: pokazujemy ostatnią zakończoną tabelę z oznaczeniem sezonu
         previous = clients.jolpica.standings(season - 1)
         standings = previous.model_copy(update={"season": season - 1}) if previous.drivers else standings
-    cases = prepare_rounds(season, clients, calendar)   # awaria Jolpica przerywa przebieg: pliki zostają nietknięte
+    store = HistoryStore(out_dir / "history")
+    _backfill_history(store, clients, season)
+    aggregates = store.all()
+    cases = prepare_rounds(season, clients, calendar, aggregates)   # awaria Jolpica przerywa przebieg: pliki zostają nietknięte
     weights_file = _tuned_weights(out_dir, cases, season)
     cache = _load_model(out_dir / "track_profiles.json", ProfileCache)
     profile_cache = cache.profiles if cache else {}
@@ -293,7 +319,11 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
         weekend = WeekendResponse(status="no_upcoming_race", payload=None)
         used, skipped, new_cache = [], [], profile_cache
     else:
-        payload, extra, new_cache = _predict_weekend(race, season, now_utc, clients, weights_file.weights, profile_cache)
+        payload, extra, new_cache = _predict_weekend(race, season, now_utc, clients, weights_file.weights, profile_cache,
+                                                     aggregates)
+        calibration = load_calibration(out_dir / "calibration.json")
+        if calibration and calibration.tau != 1.0:   # kalibracja szans na wygraną dopasowana poza próbką
+            payload = payload.model_copy(update={"race_prediction": apply_tau(payload.race_prediction, calibration.tau)})
         weekend = WeekendResponse(status="ok", payload=payload)
         sources.update(extra)
         used, skipped = payload.factors_used, payload.factors_skipped
@@ -306,7 +336,7 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
     evaluation = score_rounds(cases, weights_file.weights, config.N_SIMULATIONS_TUNING) if cases else []
     model = ModelPayload(weights=weights_file.weights, weight_history=weights_file.history,
                          factors_used=used, factors_skipped=skipped, evaluation=evaluation,
-                         live_evaluation=_live_evaluation(out_dir, season, cases))
+                         live_evaluation=_live_evaluation(out_dir, season, cases), out_of_sample=_load_oos(out_dir))
 
     out_dir.mkdir(parents=True, exist_ok=True)         # wszystko policzone i zwalidowane: zapisujemy
     _write(out_dir / "calendar.json", Calendar(season=season, races=calendar))
