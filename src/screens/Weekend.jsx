@@ -5,7 +5,7 @@ import { LoadError, Loading } from '../components/Status.jsx'
 import StrategyCard from '../components/StrategyCard.jsx'
 import WeatherCard from '../components/WeatherCard.jsx'
 import { useData } from '../lib/data.js'
-import { PROFILE_SOURCE, TRACK_SOURCE, factorLabel } from '../lib/labels.js'
+import { PROFILE_SOURCE, TRACK_SOURCE, factorLabel, prettifyId } from '../lib/labels.js'
 
 export default function Weekend() {
   const weekend = useData('weekend.json')
@@ -30,7 +30,7 @@ export default function Weekend() {
 
   const {
     race, weather, strategy, safety_car, qualifying, race_prediction, factors_skipped, low_data,
-    lineup, track_source, track_sample_size, profile_source,
+    lineup, track_source, track_sample_size, profile_source, penalties = [],
   } = weekend.data.payload
   const nameById = Object.fromEntries((standings.data?.drivers ?? []).map((d) => [d.id, d.name]))
   const skipped = factors_skipped.map(factorLabel).join(', ')
@@ -80,6 +80,19 @@ export default function Weekend() {
         <ProbabilityTable rows={mode === 'race' ? race_prediction : qualifying} nameById={nameById} mode={mode} />
         {!low_data && skipped && <p className="muted small">{`Pominięte czynniki (brak danych): ${skipped}.`}</p>}
       </section>
+
+      {penalties.length > 0 && (
+        <section className="card">
+          <h3>Kary na starcie</h3>
+          <ul className="list">
+            {penalties.map((p) => (
+              <li key={p.driver_id}>
+                {`${nameById[p.driver_id] ?? prettifyId(p.driver_id)} z ${p.from_pos}. na ${p.to_pos}.`}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   )
 }

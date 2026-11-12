@@ -166,6 +166,8 @@
   "lineup": "latest_race",
   "track_source": "computed",
   "track_sample_size": 5,
-  "profile_source": "telemetry"
+  "profile_source": "telemetry",
+  "grid_source": "predicted",
+  "penalties": []
  }
 }

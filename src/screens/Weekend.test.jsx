@@ -124,6 +124,36 @@ describe('Weekend screen', () => {
     expect(screen.getByText(/szacunek/)).toBeInTheDocument()
   })
 
+  it('shows grid penalties with driver names', async () => {
+    mockData(withPayload((p) => {
+      p.grid_source = 'official'
+      p.penalties = [{ driver_id: 'leclerc', from_pos: 3, to_pos: 13 }]
+    }))
+    render(<Weekend />)
+    expect(await screen.findByText('Kary na starcie')).toBeInTheDocument()
+    expect(screen.getByText('Charles Leclerc z 3. na 13.')).toBeInTheDocument()
+  })
+
+  it('falls back to a readable name for a driver missing from the standings', async () => {
+    mockData(withPayload((p) => { p.penalties = [{ driver_id: 'max_verstappen', from_pos: 1, to_pos: 11 }] }))
+    render(<Weekend />)
+    expect(await screen.findByText('Max Verstappen z 1. na 11.')).toBeInTheDocument()
+  })
+
+  it('shows no penalty card when there are no penalties', async () => {
+    mockData()
+    render(<Weekend />)
+    await screen.findByText('Trening 1')
+    expect(screen.queryByText('Kary na starcie')).not.toBeInTheDocument()
+  })
+
+  it('still renders files from before penalties existed (no penalties field)', async () => {
+    mockData(withPayload((p) => { delete p.penalties; delete p.grid_source }))
+    render(<Weekend />)
+    expect(await screen.findByText('Trening 1')).toBeInTheDocument()
+    expect(screen.queryByText('Kary na starcie')).not.toBeInTheDocument()
+  })
+
   it('shows the strategy and safety car odds', async () => {
     mockData()
     render(<Weekend />)
