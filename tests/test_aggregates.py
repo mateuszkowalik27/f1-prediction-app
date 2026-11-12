@@ -73,3 +73,73 @@ def test_team_with_one_stop_omitted():
 def test_unknown_driver_ignored_and_empty_inputs_give_empty_dict():
     assert "x" not in compute_pit_deltas(stops(*BASE, ("zz", 24.0)), TEAM_OF)
     assert compute_pit_deltas([], TEAM_OF) == {}
+
+
+# --- tempo wyścigowe i zużycie opon ---
+from aggregates import compute_race_pace, compute_tyre_deg   # noqa: E402
+from schemas import LapRecord                                  # noqa: E402
+
+
+def lap(driver, n, dur, pit_out=False, compound="MEDIUM", age=None):
+    return LapRecord(driver_id=driver, lap=n, duration_s=dur, is_pit_out=pit_out, compound=compound,
+                     tyre_age=age if age is not None else n - 1)
+
+
+def steady(driver, seconds, laps=range(1, 13)):
+    return [lap(driver, n, 100.0 if n == 1 else seconds) for n in laps]
+
+
+def test_race_pace_drops_lap_one_pit_laps_and_slow_laps():
+    laps = steady("A", 90.0)
+    laps[4] = lap("A", 5, 120.0)                       # safety car / błąd: >107% mediany
+    laps[6] = lap("A", 7, 96.0)                        # okrążenie wjazdowe (przed wyjazdem z boksu)
+    laps[7] = lap("A", 8, 95.0, pit_out=True)          # okrążenie wyjazdowe
+    pace = compute_race_pace(laps + steady("B", 91.0))
+    assert pace["A"] == pytest.approx((90.0 / 90.5 - 1) * 100)      # tylko czyste okrążenia po 90,0
+    assert pace["B"] == pytest.approx((91.0 / 90.5 - 1) * 100)
+
+
+def test_race_pace_negative_is_faster():
+    pace = compute_race_pace(steady("A", 90.0) + steady("B", 91.0))
+    assert pace["A"] < 0 < pace["B"]
+
+
+def test_driver_with_few_clean_laps_omitted():
+    pace = compute_race_pace(steady("A", 90.0) + steady("B", 91.0) + steady("C", 92.0, laps=range(1, 5)))
+    assert "C" not in pace
+
+
+def test_race_pace_empty_input():
+    assert compute_race_pace([]) == {}
+
+
+def stint_laps(driver, slope, compound="MEDIUM", laps=range(2, 14)):
+    """t = 90 + slope * wiek - paliwo * okrążenie: po korekcie na paliwo nachylenie = slope."""
+    return [lap(driver, n, 90 + slope * (n - 1) - 0.035 * n, compound=compound, age=n - 1) for n in laps]
+
+
+TEAMS = {"d1": "t1", "d2": "t2", "d3": "t3", "d4": "t4"}
+
+
+def test_tyre_deg_recovers_known_slope_relative_to_field():
+    deg, track = compute_tyre_deg(stint_laps("d1", 0.1) + stint_laps("d2", 0.2), TEAMS)
+    assert deg["t1"] == pytest.approx(-0.05, abs=1e-6) and deg["t2"] == pytest.approx(0.05, abs=1e-6)
+    assert track == pytest.approx(0.15, abs=1e-6)
+
+
+def test_short_stints_ignored():
+    deg, _ = compute_tyre_deg(stint_laps("d1", 0.1) + stint_laps("d2", 0.2) + stint_laps("d3", 0.5, laps=range(2, 7)), TEAMS)
+    assert "t3" not in deg
+
+
+def test_team_deg_relative_to_same_compound_median():
+    laps = (stint_laps("d1", 0.10) + stint_laps("d2", 0.20)                       # średnie: mediana 0,15
+            + stint_laps("d3", 0.05, compound="HARD") + stint_laps("d4", 0.07, compound="HARD"))   # twarde: mediana 0,06
+    deg, _ = compute_tyre_deg(laps, TEAMS)
+    assert deg["t3"] == pytest.approx(-0.01, abs=1e-6) and deg["t4"] == pytest.approx(0.01, abs=1e-6)
+    assert deg["t1"] == pytest.approx(-0.05, abs=1e-6)                             # nie miesza się z twardymi
+
+
+def test_no_valid_stints_gives_empty_and_none():
+    assert compute_tyre_deg([], TEAMS) == ({}, None)
+    assert compute_tyre_deg(steady("d1", 90.0, laps=range(1, 5)), TEAMS) == ({}, None)

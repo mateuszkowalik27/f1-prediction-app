@@ -77,3 +77,7 @@ def default_weights() -> dict[str, float]:
     """Wagi czynników oraz siła startu i poziom losowości: punkt wyjścia dla auto-wag."""
     return {**FACTOR_WEIGHTS, "grid_base_weight": GRID_BASE_WEIGHT, "race_noise_base": RACE_NOISE_BASE}
 PIT_OUTLIER_RATIO = 1.5   # postój dłuższy niż 1,5 x mediana wyścigu (czerwona flaga, kara) nie liczy się
+FUEL_EFFECT_S_PER_LAP = 0.035   # o tyle szybsze jest auto z każdym okrążeniem (spalone paliwo); korekta przy liczeniu zużycia opon
+MIN_STINT_LAPS = 8              # krótszych stintów nie używamy do zużycia opon
+RACE_PACE_MIN_LAPS = 5          # tyle czystych okrążeń trzeba mieć, żeby liczyć tempo wyścigowe kierowcy
+SLOW_LAP_RATIO = 1.07           # okrążenia wolniejsze niż 107% mediany (safety car, żółte flagi) odrzucamy
