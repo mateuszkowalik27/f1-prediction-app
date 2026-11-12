@@ -122,18 +122,24 @@ def prepare_seasons(seasons: list[int], clients: "Clients", aggregates: Sequence
     return by_season
 
 
+def _predict_case(case: RoundCase, weights: dict[str, float], n: int) -> list[DriverProbability]:
+    combined = combine(case.ctx, [_Precomputed(k, v) for k, v in case.factor_scores.items()], weights)
+    return simulate_race(
+        combined.strength, case.ctx.grid, case.sim_track, case.dnf, case.stops, n=n,
+        grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),
+        noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
+    )
+
+
 def score_rounds(cases: list[RoundCase], weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,
                  ) -> list[RaceEvaluation]:
-    evaluations = []
-    for case in cases:
-        combined = combine(case.ctx, [_Precomputed(k, v) for k, v in case.factor_scores.items()], weights)
-        prediction = simulate_race(
-            combined.strength, case.ctx.grid, case.sim_track, case.dnf, case.stops, n=n,
-            grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),
-            noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
-        )
-        evaluations.append(evaluate(case.round, prediction, case.actual_finish))
-    return evaluations
+    return [evaluate(case.round, _predict_case(case, weights, n), case.actual_finish) for case in cases]
+
+
+def predict_rounds(cases: list[RoundCase], weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,
+                   ) -> list[tuple[list[DriverProbability], dict[str, int | None]]]:
+    """Przewidywania (bez oceny) razem z faktycznym wynikiem: wejście dla kalibracji."""
+    return [(_predict_case(case, weights, n), case.actual_finish) for case in cases]
 
 
 def backtest(season: int, clients: "Clients", weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,

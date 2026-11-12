@@ -197,6 +197,12 @@ class RaceEvaluation(BaseModel):
     brier_win: float
 
 
+class Calibration(BaseModel):
+    tau: float          # wykładnik: szansa' ~ szansa^tau (tau < 1 spłaszcza zbyt pewne szanse, > 1 wyostrza)
+    n_races: int        # na ilu przewidywaniach poza próbką dopasowano
+    fitted_at: datetime
+
+
 class SeasonScore(BaseModel):
     season: int
     brier: float

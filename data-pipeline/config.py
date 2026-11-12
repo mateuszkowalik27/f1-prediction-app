@@ -87,3 +87,7 @@ BACKFILL_RACES_PER_RUN = 6      # ile wyścigów najwyżej uzupełniamy na jedno
 FIRST_BACKFILL_SEASON = 2022    # od którego sezonu zbieramy historię
 OPENF1_FIRST_SEASON = 2023      # OpenF1 ma dane dopiero od tego sezonu
 TEST_SEASONS = [2024, 2025, 2026]   # sezony oceniane poza próbką (2022-2023 służą tylko do strojenia)
+
+# Kalibracja szans (model v2)
+CAL_MIN_RACES = 60                                            # poniżej tylu przewidywań poza próbką nie korygujemy (tau = 1)
+CAL_TAU_GRID = [round(0.6 + 0.05 * i, 2) for i in range(21)]  # 0,60 ... 1,60

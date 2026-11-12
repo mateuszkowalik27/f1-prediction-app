@@ -89,3 +89,12 @@ def test_prepare_seasons_returns_cases_per_season():
 
 def test_prepare_seasons_skips_season_without_results():
     assert sorted(prepare_seasons([2020, 2027], clients(), [])) == [2027]
+
+
+def test_predict_rounds_returns_predictions_with_actual_finish():
+    from evaluation import predict_rounds
+    cases = prepare_rounds(2027, clients())
+    out = predict_rounds(cases, weights(), n=200)
+    assert len(out) == len(cases)
+    rows, actual = out[0]
+    assert abs(sum(r.win for r in rows) - 1.0) < 0.05 and actual and 1 in actual.values()   # w nielicznych symulacjach wszyscy odpadają

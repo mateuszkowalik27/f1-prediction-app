@@ -22,24 +22,32 @@ from schemas import SeasonScore
 from tuning import tune_weights
 
 
+def weights_for_season(
+    cases_by_season: dict[int, list[RoundCase]], season: int, base: dict[str, float],
+    bounds: dict[str, tuple[float, float]], locked: set[str], n: int = config.N_SIMULATIONS_TUNING,
+) -> dict[str, float]:
+    """Wagi dla sezonu `season`, dostrojone WYŁĄCZNIE na sezonach wcześniejszych."""
+    factor_names = {name for cases in cases_by_season.values() for c in cases for name in c.factor_scores}
+    train = [c for s in sorted(cases_by_season) if s < season for c in cases_by_season[s]]
+    # czynnik bez żadnych danych w treningu nie ma na co wpływać: nie stroimy go
+    untestable = {name for name in factor_names if all(c.factor_scores.get(name) is None for c in train)}
+    return tune_weights(
+        base, bounds, set(locked) | untestable, len(train),
+        lambda w: mean(e.brier_win for e in score_rounds(train, w, n)),
+    )
+
+
 def walk_forward(
     cases_by_season: dict[int, list[RoundCase]], test_seasons: list[int], base: dict[str, float],
     bounds: dict[str, tuple[float, float]], locked: set[str], n: int = config.N_SIMULATIONS_TUNING,
 ) -> dict[int, float]:
     """Dla sezonu S: wagi strojone na sezonach < S, wynik = średni Brier sezonu S."""
-    factor_names = {name for cases in cases_by_season.values() for c in cases for name in c.factor_scores}
     scores: dict[int, float] = {}
     for season in test_seasons:
         test = cases_by_season.get(season)
         if not test:
             continue
-        train = [c for s in sorted(cases_by_season) if s < season for c in cases_by_season[s]]
-        # czynnik bez żadnych danych w treningu nie ma na co wpływać: nie stroimy go
-        untestable = {name for name in factor_names if all(c.factor_scores.get(name) is None for c in train)}
-        tuned = tune_weights(
-            base, bounds, set(locked) | untestable, len(train),
-            lambda w: mean(e.brier_win for e in score_rounds(train, w, n)),
-        )
+        tuned = weights_for_season(cases_by_season, season, base, bounds, locked, n)
         scores[season] = mean(e.brier_win for e in score_rounds(test, tuned, n))
     return scores
 
