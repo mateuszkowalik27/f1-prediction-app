@@ -11,7 +11,6 @@ export default function ProbabilityTable({ rows, nameById, numberById = {}, mode
           <th>Kierowca</th>
           <th>{race ? 'Wygrana' : 'Pole position'}</th>
           <th className="num">{race ? 'Podium' : 'Top 3'}</th>
-          {race && <th className="num">Punkty</th>}
         </tr>
       </thead>
       <tbody>
@@ -30,7 +29,6 @@ export default function ProbabilityTable({ rows, nameById, numberById = {}, mode
               </div>
             </td>
             <td className="num">{pct(row.podium)}</td>
-            {race && <td className="num">{pct(row.points)}</td>}
           </tr>
         ))}
       </tbody>
