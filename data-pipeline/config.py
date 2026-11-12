@@ -76,3 +76,4 @@ DEFAULT_DNF_RATE = 0.08     # gdy nie ma jeszcze żadnych wyników
 def default_weights() -> dict[str, float]:
     """Wagi czynników oraz siła startu i poziom losowości: punkt wyjścia dla auto-wag."""
     return {**FACTOR_WEIGHTS, "grid_base_weight": GRID_BASE_WEIGHT, "race_noise_base": RACE_NOISE_BASE}
+PIT_OUTLIER_RATIO = 1.5   # postój dłuższy niż 1,5 x mediana wyścigu (czerwona flaga, kara) nie liczy się
