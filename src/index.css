@@ -78,3 +78,12 @@ td.num, th.num { text-align: right; }
 
 .card p { margin: 6px 0; }
 .app > main > .small, main > .small { margin: -6px 0 12px; }
+
+.round { padding: 0; overflow: hidden; }
+.round > div { padding: 0 14px 6px; }
+.round-button {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%;
+  min-height: 56px; padding: 12px 14px; border: 0; background: transparent; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.block { display: block; }

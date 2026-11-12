@@ -12,12 +12,12 @@ describe('App', () => {
     expect(screen.getByText('F1 Prediction App')).toBeInTheDocument()
   })
 
-  it('switches screens with the bottom tabs', () => {
+  it('switches screens with the bottom tabs', async () => {
     render(<App />)
     expect(screen.getByRole('tab', { name: 'Weekend' })).toHaveAttribute('aria-selected', 'true')
     fireEvent.click(screen.getByRole('tab', { name: 'Klasyfikacje' }))
     expect(screen.getByRole('tab', { name: 'Klasyfikacje' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('heading', { name: 'Klasyfikacje' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Klasyfikacje' })).toBeInTheDocument()
   })
 
   it('shows when the data was last updated, in Warsaw time', async () => {

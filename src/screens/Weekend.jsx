@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ProbabilityTable from '../components/ProbabilityTable.jsx'
 import SessionList from '../components/SessionList.jsx'
+import { LoadError, Loading } from '../components/Status.jsx'
 import StrategyCard from '../components/StrategyCard.jsx'
 import WeatherCard from '../components/WeatherCard.jsx'
 import { useData } from '../lib/data.js'
@@ -11,12 +12,10 @@ export default function Weekend() {
   const standings = useData('standings.json')
   const [mode, setMode] = useState('race')
 
-  if (weekend.loading || standings.loading) return <p className="muted">Wczytywanie…</p>
+  if (weekend.loading || standings.loading) return <Loading />
   const status = weekend.data?.status
   const malformed = status !== 'no_upcoming_race' && !(status === 'ok' && weekend.data.payload)
-  if (weekend.error || malformed) {
-    return <p className="banner">Nie udało się wczytać danych. Sprawdź połączenie i spróbuj ponownie.</p>
-  }
+  if (weekend.error || malformed) return <LoadError />
   if (status === 'no_upcoming_race') {
     return (
       <section className="card">
