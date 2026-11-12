@@ -100,6 +100,50 @@ class TyreHistory(BaseModel):
     dominant_compounds: list[str]
 
 
+class QualiTimes(BaseModel):
+    driver_id: str
+    q1: float | None = None   # sekundy; None = nie startował w tej sesji
+    q2: float | None = None
+    q3: float | None = None
+
+
+class PitStop(BaseModel):
+    driver_id: str
+    lap: int
+    duration_s: float         # czas przejazdu przez aleję serwisową (wjazd -> wyjazd)
+
+
+class LapRecord(BaseModel):
+    driver_id: str
+    lap: int
+    duration_s: float | None
+    is_pit_out: bool
+    compound: str | None = None
+    tyre_age: int | None = None
+
+
+class WeatherSample(BaseModel):
+    air_c: float
+    track_c: float | None = None
+
+
+class RaceAggregates(BaseModel):
+    """Raz policzone cechy zakończonego wyścigu (public/data/history/<sezon>-<runda>.json)."""
+    season: int
+    round: int
+    circuit_id: str
+    computed_at: datetime
+    quali_gap: dict[str, float]      # driver_id -> strata do pole w % (0 = pole)
+    pit_delta: dict[str, float]      # team_id -> sekundy względem mediany stawki
+    race_pace: dict[str, float]      # driver_id -> % względem mediany stawki (ujemne = szybciej)
+    tyre_deg: dict[str, float]       # team_id -> s/okrążenie względem mediany tej samej mieszanki
+    track_deg: float | None          # poziom zużycia toru w tym wyścigu (mediana nachyleń)
+    air_temp_c: float | None
+    track_temp_c: float | None
+    official_grid: dict[str, int] | None
+    sources: dict[str, Literal["ok", "missing", "failed"]]   # klucze: jolpica, openf1
+
+
 class DriverProbability(BaseModel):
     driver_id: str
     win: float
