@@ -86,3 +86,4 @@ SLOW_LAP_RATIO = 1.07           # okrążenia wolniejsze niż 107% mediany (safe
 BACKFILL_RACES_PER_RUN = 6      # ile wyścigów najwyżej uzupełniamy na jedno uruchomienie robota (limity API)
 FIRST_BACKFILL_SEASON = 2022    # od którego sezonu zbieramy historię
 OPENF1_FIRST_SEASON = 2023      # OpenF1 ma dane dopiero od tego sezonu
+TEST_SEASONS = [2024, 2025, 2026]   # sezony oceniane poza próbką (2022-2023 służą tylko do strojenia)

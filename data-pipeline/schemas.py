@@ -197,6 +197,11 @@ class RaceEvaluation(BaseModel):
     brier_win: float
 
 
+class SeasonScore(BaseModel):
+    season: int
+    brier: float
+
+
 class WeightSnapshot(BaseModel):
     season: int | None = None    # numer rundy powtarza się co sezon, więc sam nie wystarcza
     round: int
