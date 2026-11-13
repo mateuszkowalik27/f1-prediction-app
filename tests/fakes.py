@@ -116,7 +116,14 @@ class FakeOpenF1:
         self.laps, self.weather, self.grid = laps, weather, grid
         self.trace_requests = []
         self.practice_tables = None            # tabele najlepszych okrążeń (trening) zwracane przez best_laps
+        self.signals = None                    # WeekendSignals zwracane przez weekend_signals (model v3, etap 5)
         self.calls = []                       # nazwy wywołanych nowych metod (model v2)
+
+    def weekend_signals(self, race, entries):
+        self.calls.append("weekend_signals")
+        if self.broken:
+            raise KeyError("weekend")
+        return self.signals
 
     def best_laps(self, race, entries):
         self.calls.append("best_laps")

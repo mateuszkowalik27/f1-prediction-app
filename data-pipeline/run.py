@@ -29,11 +29,12 @@ from evaluation import RoundCase, evaluate, prepare_rounds, score_rounds
 from fetch.jolpica import JolpicaClient, JolpicaError
 from history_store import HistoryStore
 from results import update_results
+from scoring import ranking_rps
 from fetch.openf1 import OpenF1Client
 from fetch.openmeteo import fetch_forecast, wet_races
 from optional import optional as _optional
 from schemas import (
-    Calendar, DriverEntry, DriverProbability, FrozenPrediction, HistoricRace, Meta, ModelPayload, ProfileCache, Race,
+    Calendar, DriverEntry, DriverProbability, FrozenPrediction, HistoricRace, LiveComparison, Meta, ModelPayload, ProfileCache, Race,
     GridPenalty, SafetyCarOdds, SeasonScore, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse, WetCache,
     WeightsFile,
 )
@@ -195,6 +196,15 @@ def _load_weights(out_dir: Path) -> WeightsFile:
     return WeightsFile(weights={**defaults, **stored.weights}, history=stored.history)
 
 
+@dataclass(frozen=True)
+class WeekendExtras:
+    """Dodatki do zamrożonej prognozy (etap 5): kwalifikacje przewidziane (nie faktyczne) i wersje bez czynników z sesji weekendu."""
+    pre_quali: bool                                      # czy kwalifikacji jeszcze nie było (siatka losowana)
+    quali_predicted: list[DriverProbability]
+    race_without: list[DriverProbability] | None = None
+    quali_without: list[DriverProbability] | None = None
+
+
 def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Clients, weights: dict[str, float],
                      profile_cache: dict[str, TrackProfile], aggregates=()):
     j, f1 = clients.jolpica, clients.openf1
@@ -226,6 +236,7 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
         _optional("prognoza pogody", lambda: clients.forecast(race.lat, race.lon, start.date(), start_utc=start))
         if start else (None, False))
     practice, f1a = _optional("treningi OpenF1", f1.practice_pace, race, entries)
+    signals, f1d = _optional("sygnały z sesji weekendu (OpenF1)", f1.weekend_signals, race, entries)
     safety, f1b = _optional("safety car OpenF1", f1.safety_events, race.circuit_id, circuit_history)
     tyre, f1c = _optional("opony OpenF1", f1.tyre_history, race.circuit_id, circuit_history)
 
@@ -240,31 +251,42 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
 
     ctx = build_context(race, entries, history, circuit_history, wet, weather, practice, None, track,
                         profiles.get(race.circuit_id), profiles, as_of_round=race.round, aggregates=aggregates,
-                        long_history=older + history)
-    combined = combine_side(ctx, ALL_FACTORS, weights, "race")            # siła wyścigowa
-    quali_combined = combine_side(ctx, ALL_FACTORS, weights, "quali")     # siła kwalifikacyjna (jedno okrążenie)
+                        long_history=older + history, signals=signals)
     drivers = [e.driver_id for e in entries]
-
     rain = weather.rain_probability if weather else 0.0
     teams = {e.driver_id: e.team_id for e in entries}
     noise = {"teams": teams, "team_share": weights.get("team_noise_share", config.TEAM_NOISE_SHARE),
              "chaos_mult": weights.get("chaos_mult", config.CHAOS_MULT)}
-    quali = predict_qualifying(quali_combined.strength, noise=weights.get("quali_noise", config.QUALIFYING_NOISE),
-                               chaos_prob=weights.get("chaos_quali", 0.0), **noise)
-    quali_rows = _actual_quali_rows(start_grid.quali, drivers) if start_grid else quali.probabilities
     dnf, sim_track = apply_early_season(dnf_rates(ctx), track, race.round)
     strategy = predict_strategy(track, weather, tyre, track_deg_ratio(ctx))
-    race_rows = simulate_race(   # bez siatki (przed kwalifikacjami) losujemy ją w każdej symulacji
-        combined.strength, actual_grid, sim_track, dnf, strategy.primary.stops,
-        grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),
-        noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
-        qualifying_noise=weights.get("quali_noise", config.QUALIFYING_NOISE),
-        quali_strength=quali_combined.strength,     # siatka przed kwalifikacjami losowana z siły kwalifikacyjnej
-        chaos_prob=chaos_prob_from(weights, sc=sim_track.sc_probability, rain=rain), **noise,
-    )
+
+    def simulate(w: dict[str, float]):
+        """Siła wyścigowa i kwalifikacyjna dla wag `w`, prognoza kwalifikacji i wyścigu."""
+        race_c = combine_side(ctx, ALL_FACTORS, w, "race")            # siła wyścigowa
+        quali_c = combine_side(ctx, ALL_FACTORS, w, "quali")          # siła kwalifikacyjna (jedno okrążenie)
+        quali_pred = predict_qualifying(quali_c.strength, noise=w.get("quali_noise", config.QUALIFYING_NOISE),
+                                        chaos_prob=w.get("chaos_quali", 0.0), **noise)
+        race_pred = simulate_race(   # bez siatki (przed kwalifikacjami) losujemy ją w każdej symulacji
+            race_c.strength, actual_grid, sim_track, dnf, strategy.primary.stops,
+            grid_weight=w.get("grid_base_weight", config.GRID_BASE_WEIGHT),
+            noise_base=w.get("race_noise_base", config.RACE_NOISE_BASE),
+            qualifying_noise=w.get("quali_noise", config.QUALIFYING_NOISE),
+            quali_strength=quali_c.strength,     # siatka przed kwalifikacjami losowana z siły kwalifikacyjnej
+            chaos_prob=chaos_prob_from(w, sc=sim_track.sc_probability, rain=rain), **noise,
+        )
+        return race_c, quali_pred, race_pred
+
+    combined, quali, race_rows = simulate(weights)
+    quali_rows = _actual_quali_rows(start_grid.quali, drivers) if start_grid else quali.probabilities
+    extras = WeekendExtras(pre_quali=start_grid is None, quali_predicted=quali.probabilities)
+    if signals:      # druga prognoza bez czynników z sesji weekendu: do oceny na bieżąco (etap 5)
+        _, quali_np, race_np = simulate({**weights, "fp2_long_run": 0.0, "sprint_pace": 0.0,
+                                         "q_fp3_quali_sim": 0.0, "q_sq_quali": 0.0})
+        extras = WeekendExtras(pre_quali=extras.pre_quali, quali_predicted=quali.probabilities,
+                               race_without=race_np, quali_without=quali_np.probabilities)
     sources = {
         "open_meteo": "failed" if weather_failed else ("ok" if weather else "missing"),
-        "openf1": "failed" if (f1a or f1b or f1c) else ("ok" if (practice or safety or tyre) else "missing"),
+        "openf1": "failed" if (f1a or f1b or f1c or f1d) else ("ok" if (practice or safety or tyre or signals) else "missing"),
     }
     profile = profiles.get(race.circuit_id)
     payload = WeekendPayload(
@@ -277,7 +299,7 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
         penalties=start_grid.penalties if start_grid else [], track_source=track.source, track_sample_size=track.sample_size,
         profile_source=profile.source if profile else None,
     )
-    return payload, sources, new_cache
+    return payload, sources, new_cache, extras
 
 
 def _load_oos(out_dir: Path) -> list[SeasonScore]:
@@ -312,6 +334,22 @@ def _live_evaluation(out_dir: Path, season: int, cases: list[RoundCase]):
         frozen = _load_model(out_dir / "predictions" / f"{season}-{case.round}.json", FrozenPrediction)
         if frozen:
             result.append(evaluate(case.round, frozen.race_prediction, case.actual_finish))
+    return result
+
+
+def _live_comparison(out_dir: Path, season: int, cases: list[RoundCase]) -> list[LiveComparison]:
+    """RPS zamrożonej prognozy z czynnikami z sesji weekendu i bez nich (tylko rundy, w których były sygnały)."""
+    result = []
+    for case in cases:
+        frozen = _load_model(out_dir / "predictions" / f"{season}-{case.round}.json", FrozenPrediction)
+        if not frozen or not frozen.race_prediction_without_practice:
+            continue
+        quali = (ranking_rps(frozen.qualifying, case.actual_quali), ranking_rps(frozen.qualifying_without_practice, case.actual_quali)) \
+            if frozen.qualifying and frozen.qualifying_without_practice and case.actual_quali else (None, None)
+        result.append(LiveComparison(
+            round=case.round, race_rps=ranking_rps(frozen.race_prediction, case.actual_finish),
+            race_rps_without=ranking_rps(frozen.race_prediction_without_practice, case.actual_finish),
+            quali_rps=quali[0], quali_rps_without=quali[1]))
     return result
 
 
@@ -373,25 +411,37 @@ def run_pipeline(out_dir: Path, season: int, now_utc: datetime, clients: Clients
         weekend = WeekendResponse(status="no_upcoming_race", payload=None)
         used, skipped, new_cache = [], [], profile_cache
     else:
-        payload, extra, new_cache = _predict_weekend(race, season, now_utc, clients, weights_file.weights, profile_cache,
-                                                     aggregates)
+        payload, extra, new_cache, extras = _predict_weekend(race, season, now_utc, clients, weights_file.weights,
+                                                             profile_cache, aggregates)
         calibration = load_calibration(out_dir / "calibration.json")
+        race_without = extras.race_without
         # kalibracja była dopasowana na przewidywaniach ze znaną siatką: przed kwalifikacjami (siatka losowana) jej nie stosujemy
         if calibration and calibration.tau != 1.0 and payload.grid_source != "predicted":
             payload = payload.model_copy(update={"race_prediction": apply_tau(payload.race_prediction, calibration.tau)})
+            race_without = apply_tau(race_without, calibration.tau) if race_without else None
         weekend = WeekendResponse(status="ok", payload=payload)
         sources.update(extra)
         used, skipped = payload.factors_used, payload.factors_skipped
         start = _race_start(race)
         if start is None or now_utc < start:   # po starcie wyścigu przewidywania już nie nadpisujemy
+            prior = _load_model(out_dir / "predictions" / f"{season}-{race.round}.json", FrozenPrediction)
+            # kwalifikacje zamrażamy jako PRZEWIDZIANE (przed kwalifikacjami); po nich zostaje ostatnia prognoza sprzed nich
+            if extras.pre_quali:
+                quali_frozen, quali_without = extras.quali_predicted, extras.quali_without
+            else:
+                quali_frozen = prior.qualifying if prior else None
+                quali_without = prior.qualifying_without_practice if prior else None
             frozen = FrozenPrediction(season=season, round=race.round, saved_at=now_utc,
-                                      race_prediction=payload.race_prediction)
+                                      race_prediction=payload.race_prediction, qualifying=quali_frozen,
+                                      race_prediction_without_practice=race_without,
+                                      qualifying_without_practice=quali_without)
 
     meta = Meta(generated_at=now_utc, season=season, data_sources=sources)
     evaluation = score_rounds(cases, weights_file.weights, config.N_SIMULATIONS_TUNING) if cases else []
     model = ModelPayload(weights=weights_file.weights, weight_history=weights_file.history,
                          factors_used=used, factors_skipped=skipped, evaluation=evaluation,
-                         live_evaluation=_live_evaluation(out_dir, season, cases), out_of_sample=_load_oos(out_dir))
+                         live_evaluation=_live_evaluation(out_dir, season, cases),
+                         live_comparison=_live_comparison(out_dir, season, cases), out_of_sample=_load_oos(out_dir))
 
     out_dir.mkdir(parents=True, exist_ok=True)         # wszystko policzone i zwalidowane: zapisujemy
     _write(out_dir / "calendar.json", Calendar(season=season, races=calendar))

@@ -269,6 +269,19 @@ class FrozenPrediction(BaseModel):
     round: int
     saved_at: datetime
     race_prediction: list[DriverProbability]
+    # model v3, etap 5: przewidywana kolejność kwalifikacji i wersje "bez czynników treningowych" do oceny na bieżąco
+    qualifying: list[DriverProbability] | None = None
+    race_prediction_without_practice: list[DriverProbability] | None = None
+    qualifying_without_practice: list[DriverProbability] | None = None
+
+
+class LiveComparison(BaseModel):
+    """Ocena na bieżąco czynników z sesji weekendu: RPS zamrożonej prognozy z nimi i bez nich (mniej = lepiej)."""
+    round: int
+    race_rps: float
+    race_rps_without: float
+    quali_rps: float | None = None
+    quali_rps_without: float | None = None
 
 
 class WeekendResponse(BaseModel):
@@ -289,6 +302,7 @@ class ModelPayload(BaseModel):
     factors_skipped: list[str]
     evaluation: list[RaceEvaluation]
     live_evaluation: list[RaceEvaluation] = []     # ocena przewidywań, które użytkownik faktycznie widział
+    live_comparison: list[LiveComparison] = []     # to samo dla czynników z sesji weekendu: z nimi vs bez (etap 5)
     out_of_sample: list[SeasonScore] = []          # Brier poza próbką (public/data/oos.json, liczony ręcznie)
 
 

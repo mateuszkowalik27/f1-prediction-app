@@ -528,3 +528,56 @@ def test_noise_options_reach_both_simulations(tmp_path, monkeypatch):
         assert seen[side]["team_share"] == 0.4 and seen[side]["teams"]
     assert seen["quali"]["chaos_prob"] == 0.0                                        # kwalifikacje: chaos osobnym parametrem (domyślnie 0)
     assert seen["race"]["chaos_prob"] > 0.1                                          # wyścig: baza + składnik od ryzyka safety cara
+
+
+# --- czynniki treningowe: dwie wersje prognozy i ocena na bieżąco (model v3, etap 5) ---
+def strong_signals():
+    from schemas import WeekendSignals
+    # d4 (najsłabszy w historii atrap) jest w treningach najszybszy: sygnały wyraźnie zmieniają prognozę
+    pace = {"d4": -2.0, "d3": -1.0, "d2": 1.0, "d1": 2.0}
+    return WeekendSignals(long_run=pace, quali_sim=pace)
+
+
+def test_frozen_file_has_both_versions_when_weekend_signals_exist(tmp_path):
+    from schemas import FrozenPrediction
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2, openf1=openf1_with(strong_signals())))
+    frozen = read(tmp_path, "predictions/2027-3.json", FrozenPrediction)
+    assert frozen.race_prediction_without_practice and frozen.qualifying and frozen.qualifying_without_practice
+    wins = lambda rows: {p.driver_id: round(p.win, 4) for p in rows}
+    assert wins(frozen.race_prediction) != wins(frozen.race_prediction_without_practice)
+    assert wins(frozen.qualifying) != wins(frozen.qualifying_without_practice)
+
+
+def test_frozen_file_has_no_second_version_without_signals(tmp_path):
+    from schemas import FrozenPrediction
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
+    frozen = read(tmp_path, "predictions/2027-3.json", FrozenPrediction)
+    assert frozen.race_prediction and frozen.race_prediction_without_practice is None and frozen.qualifying
+
+
+def test_old_frozen_file_without_the_new_fields_still_loads(tmp_path):
+    from schemas import FrozenPrediction
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
+    path = tmp_path / "predictions" / "2027-3.json"
+    old = json.loads(path.read_text())
+    for key in ("qualifying", "race_prediction_without_practice", "qualifying_without_practice"):
+        old.pop(key, None)
+    path.write_text(json.dumps(old))
+    assert FrozenPrediction.model_validate_json(path.read_text()).qualifying is None
+
+
+def test_live_comparison_scores_both_versions_after_the_race(tmp_path):
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2, openf1=openf1_with(strong_signals())))
+    after = datetime(2027, 4, 11, 14, 0, tzinfo=UTC)
+    run_pipeline(tmp_path, 2027, after, clients(completed=3, grid=QUALI_GRID, openf1=openf1_with(strong_signals())))
+    model = read(tmp_path, "model.json", ModelPayload)
+    (row,) = model.live_comparison
+    assert row.round == 3 and 0 <= row.race_rps <= 1 and 0 <= row.race_rps_without <= 1
+    assert row.race_rps != row.race_rps_without
+    assert row.quali_rps is not None and row.quali_rps_without is not None
+
+
+def openf1_with(signals):
+    f1 = FakeOpenF1()
+    f1.signals = signals
+    return f1
