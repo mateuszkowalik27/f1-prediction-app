@@ -200,8 +200,14 @@ RATING_QUALI_DRIVER_K = 6    # ściąganie poprawki kierowcy (względem kolegi) 
 
 # Losowość symulacji (model v3, etap 4): wspólny wstrząs zespołu i chaos (mieszanka). Zerowe = zachowanie sprzed etapu 4.
 TEAM_NOISE_SHARE = 0.0   # jaka część losowości kierowcy jest wspólna dla zespołu (0-1)
-CHAOS_BASE = 0.0         # bazowe prawdopodobieństwo "chaosu" w wyścigu / kwalifikacjach
+CHAOS_BASE = 0.2         # prawdopodobieństwo "chaosu" w wyścigu (wybrane na 2022-2023; bramka na 2024-2026 poniżej)
 CHAOS_SC = 0.0           # dodatek do tego prawdopodobieństwa za ryzyko safety cara toru (tylko wyścig)
 CHAOS_RAIN = 0.0         # dodatek za szansę deszczu
-CHAOS_MULT = 2.0         # ile razy większa jest losowość w symulacji z chaosem
+CHAOS_MULT = 3.0         # ile razy większa jest losowość w symulacji z chaosem
 CHAOS_QUALI = 0.0       # prawdopodobieństwo chaosu w kwalifikacjach (skan 2026-11-13: chaos w kwalifikacjach pogarszał RPS, więc 0)
+# Bramka etapu 4 v3 (2026-11-13), chaos tylko w wyścigu (RPS wariant - baza, przedział 90%, 68 wyścigów testowych):
+#   noise_model (chaos 0,2 x3): po kwal. -0,0022 [-0,0026; -0,0019] BETTER, przed -0,0001 (nieoznaczone), kwal. bez zmian -> WCHODZI.
+#   noise_model_lite (0,1 x3): po -0,0012 BETTER. Ogony po kwalifikacjach (test): kierowcy z prognozą < 2% wygrali 6 razy przy ok. 0,7
+#   oczekiwanych (bez chaosu) vs 2 przy ok. 1,6 oczekiwanych (z chaosem); log-strata zwycięzcy po kwal. 1,313 -> 1,282.
+#   Wspólny wstrząs zespołu (TEAM_NOISE_SHARE) zostaje 0: nie zmienia rozkładów brzegowych każdego kierowcy, więc użytymi miarami
+#   (RPS, log-strata) nie da się go zweryfikować; kod i parametr zostają. Chaos w kwalifikacjach (CHAOS_QUALI) pogarszał RPS: 0.

@@ -210,11 +210,11 @@ def test_backtest_context_carries_a_long_history_with_older_seasons_but_no_futur
 
 
 # --- wspólny wstrząs i chaos w ocenie (model v3, etap 4) ---
-def test_noise_parameters_in_the_weights_change_the_evaluation_and_zero_means_unchanged():
+def test_noise_parameters_in_the_weights_change_the_evaluation_and_zero_means_off():
     case = prepare_rounds(2027, clients(grid=QUALI))[0]
-    base = {**weights(), "team_noise_share": 0.0, "chaos_base": 0.0, "chaos_mult": 2.0}
-    plain = evaluate_levels([case], weights(), n=400)[0]
-    zero = evaluate_levels([case], base, n=400)[0]
-    wild = evaluate_levels([case], {**base, "team_noise_share": 0.6, "chaos_base": 0.5, "chaos_mult": 4.0}, n=400)[0]
-    assert plain == zero                                              # domyślne (zerowe) parametry nic nie zmieniają
-    assert (wild.rps_pre, wild.rps_post, wild.rps_quali) != (zero.rps_pre, zero.rps_post, zero.rps_quali)
+    off = {**weights(), "team_noise_share": 0.0, "chaos_base": 0.0, "chaos_sc": 0.0, "chaos_rain": 0.0}
+    plain = evaluate_levels([case], off, n=400)[0]
+    other_mult = evaluate_levels([case], {**off, "chaos_mult": 7.0}, n=400)[0]
+    wild = evaluate_levels([case], {**off, "team_noise_share": 0.6, "chaos_base": 0.5, "chaos_mult": 4.0}, n=400)[0]
+    assert plain == other_mult                                        # bez chaosu mnożnik nic nie zmienia
+    assert (wild.rps_pre, wild.rps_post, wild.rps_quali) != (plain.rps_pre, plain.rps_post, plain.rps_quali)
