@@ -212,3 +212,4 @@ CHAOS_QUALI = 0.0       # prawdopodobieństwo chaosu w kwalifikacjach (skan 2026
 #   Wspólny wstrząs zespołu (TEAM_NOISE_SHARE) zostaje 0: nie zmienia rozkładów brzegowych każdego kierowcy, więc użytymi miarami
 #   (RPS, log-strata) nie da się go zweryfikować; kod i parametr zostają. Chaos w kwalifikacjach (CHAOS_QUALI) pogarszał RPS: 0.
 # Punkt odniesienia po etapie 4 v3 (2026-11-13, wagi bazowe, średni RPS): przed kwal. 0,1202, po kwal. 0,1125, kwalifikacje 0,1066; kalibracja tau = 0,90.
+PRACTICE_LONGRUN_MIN_LAPS = 5   # tyle czystych okrążeń na jednej mieszance trzeba mieć w stincie treningowym, żeby uznać go za długi przejazd

@@ -325,3 +325,11 @@ class RoundResults(BaseModel):
     generated_at: datetime
     sessions: dict[str, SessionTable]
     attempts: dict[str, int] = {}     # sesja -> ile razy próbowaliśmy ją pobrać bez skutku (po limicie rezygnujemy)
+
+
+class WeekendSignals(BaseModel):
+    """Sygnały z sesji bieżącego weekendu (OpenF1), w % względem mediany stawki (ujemne = szybciej); puste = brak danych."""
+    long_run: dict[str, float] = {}      # tempo z długich przejazdów FP2
+    quali_sim: dict[str, float] = {}     # symulacja kwalifikacji z FP3
+    sprint_pace: dict[str, float] = {}   # czyste tempo okrążeń ze sprintu
+    sq_gap: dict[str, float] = {}        # strata do najszybszego w kwalifikacjach sprintu
