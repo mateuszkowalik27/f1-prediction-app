@@ -169,3 +169,6 @@ DEG_HIGH_RATIO = 1.25        # tor uznajemy za "wysokie zużycie", gdy jego pozi
 #   pit_stop:  przed +0,0004 [-0,0002; +0,0009] nieoznaczone, po +0,0006 [+0,0002; +0,0009] WORSE, kwal. +0,0009 WORSE
 #     -> WYPADA (waga 0, LOCKED_WEIGHTS). Dawna miara (zwycięzca) uznała go za pomocny; pełna kolejność tego nie potwierdza
 #     (podejrzenie z v2: zastępnik siły zespołu, nie szybkości załogi).
+# Etap 2 v3 (2026-11-13), osobne siły kwalifikacyjna i wyścigowa vs dawna wspólna (RPS, z - bez, przedział 90%):
+#   przed kwal. -0,0020 [-0,0030; -0,0010] BETTER, po kwal. +0,0001 [-0,0000; +0,0002] bez różnicy, kwal. -0,0051 [-0,0066; -0,0036] BETTER.
+#   Średni RPS (osobne): przed 0,1206, po 0,1148, kwalifikacje 0,1066. Szum kwalifikacji 0,7 wybrany na 2022-2023.

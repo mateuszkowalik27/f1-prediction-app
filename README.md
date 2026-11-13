@@ -147,6 +147,23 @@ Bramka nową miarą (2026-11-13) dla czynników z v2:
 - `quali_gap` **zostaje bez zmian**, choć automat zwróciłby „wypada": pomaga przed kwalifikacjami i w kwalifikacjach, a po
   kwalifikacjach lekko szkodzi (dubluje informację z siatki). Rozstrzyga to etap 2 (osobna siła kwalifikacyjna i wyścigowa).
 
+### Etap 2: osobna siła kwalifikacyjna i wyścigowa
+
+Model ma teraz **dwie siły**: *kwalifikacyjną* (jedno okrążenie; zasila prognozę kwalifikacji i losowanie siatki przed
+kwalifikacjami) i *wyścigową* (tempo na dystansie). Mają osobne wagi (`QUALI_FACTOR_WEIGHTS` w `config.py`, ustawione ręcznie).
+`quali_gap` służy tylko kwalifikacjom; kwalifikacje wpływają na wyścig wyłącznie przez miejsce na starcie. Losowość kwalifikacji
+(`QUALIFYING_NOISE = 0,7`) wybrana na sezonach 2022-2023, na testowych 2024-2026 jest blisko optimum.
+
+Wynik (2026-11-13, 68 wyścigów testowych, średni RPS, osobne siły vs dawna wspólna siła):
+
+| Poziom | osobne | wspólna | różnica, przedział 90% | werdykt |
+|---|---|---|---|---|
+| przed kwalifikacjami | 0,1206 | 0,1226 | -0,0020 [-0,0030; -0,0010] | lepiej |
+| po kwalifikacjach | 0,1148 | 0,1147 | +0,0001 [-0,0000; +0,0002] | bez różnicy |
+| kwalifikacje | 0,1066 | 0,1117 | -0,0051 [-0,0066; -0,0036] | lepiej |
+
+Czyli kwalifikacje i prognozy sprzed kwalifikacji są wyraźnie lepsze, a po kwalifikacjach nic się nie pogorszyło.
+
 ## Wyniki sesji w Kalendarzu
 
 Po rozwinięciu rundy zakończone sesje mają przycisk „Wyniki": treningi i kwalifikacje sprintu (najlepszy czas
