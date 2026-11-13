@@ -178,7 +178,7 @@ DEG_HIGH_RATIO = 1.25        # tor uznajemy za "wysokie zużycie", gdy jego pozi
 #   Średni RPS (osobne): przed 0,1206, po 0,1148, kwalifikacje 0,1066. Szum kwalifikacji 0,7 wybrany na 2022-2023.
 
 # Oceny siły (ratings.py, model v3 etap 3); wstępne wartości, dobierane na sezonach 2022-2023 (oos.py --scan-ratings)
-RATING_ETA_CAR = 0.15       # tempo uczenia oceny auta po wyścigu
-RATING_ETA_DRIVER = 0.08    # tempo uczenia poprawki kierowcy
-RATING_CAR_KEEP = 0.6       # ile oceny auta zostaje na początku nowego sezonu (auta się zmieniają)
+RATING_ETA_CAR = 0.1        # tempo uczenia oceny auta po wyścigu (wybrane na 2022-2023; krajobraz płaski: różnice ~0,0001 RPS)
+RATING_ETA_DRIVER = 0.03    # tempo uczenia poprawki kierowcy (wolniej niż auto: kierowca zmienia się wolniej)
+RATING_CAR_KEEP = 0.8       # ile oceny auta zostaje na początku nowego sezonu (auta się zmieniają)
 RATING_DRIVER_KEEP = 0.9    # ile poprawki kierowcy zostaje na początku nowego sezonu
