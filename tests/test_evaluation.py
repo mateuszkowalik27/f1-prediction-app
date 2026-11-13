@@ -117,8 +117,8 @@ QUALI = {"d1": 1, "d2": 2, "d3": 3, "d4": 4}
 
 
 def only(factor):
-    return {**{k: 0.0 for k in weights()}, factor: 1.0, "grid_base_weight": config.GRID_BASE_WEIGHT,
-            "race_noise_base": config.RACE_NOISE_BASE}
+    return {**{k: 0.0 for k in weights()}, factor: 1.0, f"q_{factor}": 1.0, "grid_base_weight": config.GRID_BASE_WEIGHT,
+            "race_noise_base": config.RACE_NOISE_BASE, "quali_noise": config.QUALIFYING_NOISE}
 
 
 def test_prepare_rounds_stores_the_actual_qualifying_order():
@@ -154,3 +154,47 @@ def test_a_strength_that_matches_the_real_qualifying_scores_better():
     good = evaluate_levels([right], only("car_pace"), n=500)[0].rps_quali
     bad = evaluate_levels([wrong], only("car_pace"), n=500)[0].rps_quali
     assert good < bad
+
+
+# --- osobne siły kwalifikacyjna i wyścigowa (model v3, etap 2) ---
+QG = {"d1": 3.0, "d2": 1.0, "d3": -1.0, "d4": -3.0}                      # czynnik zgodny z faktycznymi kwalifikacjami
+
+
+def quali_gap_case():
+    base = prepare_rounds(2027, clients(grid=QUALI))[0]
+    return replace(base, factor_scores={"quali_gap": QG})
+
+
+def quali_weights(q=1.0, race=0.0, noise=0.8):
+    return {**{k: 0.0 for k in weights()}, "quali_gap": race, "q_quali_gap": q, "quali_noise": noise,
+            "grid_base_weight": config.GRID_BASE_WEIGHT, "race_noise_base": config.RACE_NOISE_BASE}
+
+
+def test_separate_qualifying_strength_uses_its_own_weights():
+    case = quali_gap_case()
+    split = evaluate_levels([case], quali_weights(q=1.0, race=0.0), n=500)[0].rps_quali
+    no_signal = evaluate_levels([case], quali_weights(q=0.0, race=0.0), n=500)[0].rps_quali
+    assert split < no_signal                           # waga q_quali_gap działa na kwalifikacje mimo wagi wyścigowej 0
+
+
+def test_shared_mode_reproduces_the_old_behaviour():
+    case = quali_gap_case()
+    shared = evaluate_levels([case], quali_weights(q=0.0, race=0.0), n=500, separate=False)[0].rps_quali
+    no_signal = evaluate_levels([case], quali_weights(q=0.0, race=0.0), n=500)[0].rps_quali
+    assert shared < no_signal                          # stary tryb: quali_gap (waga 0,10) zasilał też kwalifikacje
+
+
+def test_qualifying_noise_from_the_weights_is_used():
+    case = quali_gap_case()
+    sharp = evaluate_levels([case], quali_weights(noise=0.1), n=800)[0].rps_quali
+    blurry = evaluate_levels([case], quali_weights(noise=1.5), n=800)[0].rps_quali
+    assert sharp < blurry
+
+
+def test_unknown_grid_prediction_uses_the_qualifying_strength():
+    case = quali_gap_case()
+    case = replace(case, factor_scores={**case.factor_scores, "car_pace": {d: 0.0 for d in QG}})     # neutralna siła wyścigowa
+    w = {**quali_weights(q=1.0, race=0.0), "car_pace": 1.0}
+    split = _predict_case(case, w, 600, grid_known=False)
+    shared = _predict_case(case, w, 600, grid_known=False, separate=False)
+    assert [p.win for p in split] != [p.win for p in shared]

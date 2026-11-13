@@ -15,7 +15,7 @@ from statistics import mean
 from typing import TYPE_CHECKING
 
 import config
-from factors.base import RaceContext, combine
+from factors.base import RaceContext, combine, combine_side
 from factors.context import build_context, race_from_history
 from factors.registry import ALL_FACTORS
 from factors.reliability import dnf_rates
@@ -138,14 +138,29 @@ def prepare_seasons(seasons: list[int], clients: "Clients", aggregates: Sequence
     return by_season
 
 
+LEGACY_SHARED_QUALI_GAP = 0.10   # waga quali_gap w dawnym, wspólnym trybie (przed etapem 2 modelu v3), do porównań A/B
+
+
+def _strengths(case: RoundCase, weights: dict[str, float], separate: bool):
+    """(siła wyścigowa, siła kwalifikacyjna). `separate=False` to dawne zachowanie: jedna siła (z quali_gap) do obu."""
+    factors = [_Precomputed(k, v) for k, v in case.factor_scores.items()]
+    if separate:
+        return (combine_side(case.ctx, factors, weights, "race").strength,
+                combine_side(case.ctx, factors, weights, "quali").strength)
+    shared = combine(case.ctx, factors, {**weights, "quali_gap": LEGACY_SHARED_QUALI_GAP}).strength
+    return shared, shared
+
+
 def _predict_case(case: RoundCase, weights: dict[str, float], n: int, grid_known: bool = True,
-                  ) -> list[DriverProbability]:
-    """`grid_known=False`: prognoza sprzed kwalifikacji (siatka losowana w każdej symulacji)."""
-    combined = combine(case.ctx, [_Precomputed(k, v) for k, v in case.factor_scores.items()], weights)
+                  separate: bool = True) -> list[DriverProbability]:
+    """`grid_known=False`: prognoza sprzed kwalifikacji (siatka losowana w każdej symulacji, z siły kwalifikacyjnej)."""
+    race_strength, quali_strength = _strengths(case, weights, separate)
     return simulate_race(
-        combined.strength, case.ctx.grid if grid_known else None, case.sim_track, case.dnf, case.stops, n=n,
+        race_strength, case.ctx.grid if grid_known else None, case.sim_track, case.dnf, case.stops, n=n,
         grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),
         noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
+        qualifying_noise=(weights.get("quali_noise", config.QUALIFYING_NOISE) if separate else config.QUALIFYING_NOISE),
+        quali_strength=quali_strength if separate else None,
     )
 
 
@@ -160,15 +175,16 @@ class RaceLevels:
 
 
 def evaluate_levels(cases: list[RoundCase], weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,
-                    ) -> list[RaceLevels]:
+                    separate: bool = True) -> list[RaceLevels]:
     out = []
     for case in cases:
-        post = _predict_case(case, weights, n)
-        pre = _predict_case(case, weights, n, grid_known=False)
+        post = _predict_case(case, weights, n, separate=separate)
+        pre = _predict_case(case, weights, n, grid_known=False, separate=separate)
         quali = None
         if case.actual_quali:
-            combined = combine(case.ctx, [_Precomputed(k, v) for k, v in case.factor_scores.items()], weights)
-            quali = ranking_rps(predict_qualifying(combined.strength, n=n).probabilities, case.actual_quali)
+            _, quali_strength = _strengths(case, weights, separate)
+            noise = weights.get("quali_noise", config.QUALIFYING_NOISE) if separate else config.QUALIFYING_NOISE
+            quali = ranking_rps(predict_qualifying(quali_strength, n=n, noise=noise).probabilities, case.actual_quali)
         out.append(RaceLevels(
             round=case.round, rps_pre=ranking_rps(pre, case.actual_finish), rps_post=ranking_rps(post, case.actual_finish),
             rps_quali=quali, brier_win_post=evaluate(case.round, post, case.actual_finish).brier_win,
