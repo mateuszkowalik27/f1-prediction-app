@@ -191,3 +191,6 @@ RATING_DRIVER_KEEP = 0.9    # ile poprawki kierowcy zostaje na początku nowego 
 #   v3_core (oceny 0,17 + tempo 0,10 + po połowie starych punktów): przed -0,0003 [-0,0005; -0,0001] BETTER, po -0,0001 -> WCHODZI.
 #   Efekt jest mały (ok. 0,3% RPS przed kwalifikacjami), ale jednoznaczny kierunkowo i bez pogorszenia po kwalifikacjach.
 RATING_QUALI_DRIVER_K = 6    # ściąganie poprawki kierowcy (względem kolegi) ku zeru: n/(n+K); porównanie z kolegą jest zaszumione
+#   rating_quali (zastępuje quali_gap w sile kwalifikacyjnej): przed +0,0010 [+0,0003; +0,0018] WORSE, kwal. +0,0016 [+0,0008; +0,0024] WORSE -> WYPADA.
+#   rating_quali_plus (pół na pół z quali_gap): przed +0,0003, kwal. +0,0003, oba nieoznaczone -> stan dotychczasowy (rating_quali waga 0, LOCKED).
+#   Wniosek: prosta średnia straty kierowcy (quali_gap) jest w kwalifikacjach lepsza niż rozkład na auto i kierowcę.
