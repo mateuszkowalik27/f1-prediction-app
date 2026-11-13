@@ -21,6 +21,7 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "race_vs_quali": 0.0,   # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "tyre_deg_fit": 0.0,    # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "temp_fit": 0.0,        # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
+    "pace_race": 0.0,       # model v3, etap 3: czyste tempo okrążeń; waga po bramce (komentarz na dole)
     "rating_race": 0.0,     # model v3, etap 3: ocena Plackett-Luce auto + kierowca; waga po bramce (komentarz na dole)
 }
 # Wagi siły KWALIFIKACYJNEJ (jedno okrążenie); zasila przewidywanie kwalifikacji i losowanie siatki przed kwalifikacjami.
@@ -58,6 +59,7 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "tyre_deg_fit": (0.0, 0.15),
     "temp_fit": (0.0, 0.08),
     "rating_race": (0.0, 0.5),
+    "pace_race": (0.0, 0.3),
     "quali_noise": (0.3, 1.5),
     "grid_base_weight": (0.3, 1.6),
     "race_noise_base": (0.3, 1.5),

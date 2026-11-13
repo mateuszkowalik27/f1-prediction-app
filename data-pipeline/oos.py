@@ -125,6 +125,7 @@ def quali_noise_scan(cases: list[RoundCase], weights: dict[str, float], noises: 
 VARIANTS: dict[str, dict[str, float]] = {
     "rating_race": {"car_pace": 0.0, "driver_form": 0.0, "rating_race": 0.45},          # oceny zamiast punktów
     "rating_race_plus": {"car_pace": 0.15, "driver_form": 0.075, "rating_race": 0.225},  # oceny obok połowy starych czynników
+    "pace_race": {"pace_race": 0.10, "car_pace": 0.25, "driver_form": 0.10},             # czyste tempo kosztem części punktów
 }
 
 
