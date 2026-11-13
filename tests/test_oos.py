@@ -187,3 +187,29 @@ def test_rating_scan_returns_a_finite_score_for_every_combination():
                                                                          "race_noise_base": 0.5, "quali_noise": 0.7}
     out = rating_scan(cases, weights, grid, n=200)
     assert len(out) == 2 and all(math.isfinite(v["pre"]) and math.isfinite(v["post"]) for v in out.values())
+
+
+# --- diagnostyka ogonów i skan losowości (model v3, etap 4) ---
+from oos import noise_scan, tail_report  # noqa: E402
+
+
+def test_levels_include_the_winner_log_loss():
+    out = walk_forward_levels(CASES, [2024], BASE, BOUNDS, set(), n=300)[2024]
+    assert all(0 <= x.logloss_win_pre <= 7 and 0 <= x.logloss_win_post <= 7 for x in out)   # 7 ~ -ln(0,001)
+
+
+def test_tail_report_counts_longshot_wins_and_favourite_calibration():
+    weights = {**BASE, "signal": 1.0, "noise": 0.0}
+    report = tail_report(CASES[2024], weights, n=500)
+    for level in ("pre", "post"):
+        r = report[level]
+        assert set(r) == {"races", "longshot_expected", "longshot_actual", "fav_n", "fav_pred", "fav_actual"}
+        assert r["races"] == 8 and 0 <= r["longshot_actual"] <= 8 and r["longshot_expected"] >= 0
+
+
+def test_noise_scan_returns_every_metric_for_every_combination():
+    grid = [{"team_noise_share": 0.0, "chaos_base": 0.0, "chaos_mult": 2.0}, {"team_noise_share": 0.4, "chaos_base": 0.2, "chaos_mult": 3.0}]
+    out = noise_scan(CASES[2024], {**BASE, "signal": 1.0, "noise": 0.0}, grid, n=300)
+    assert len(out) == 2
+    for row in out.values():
+        assert {"rps_pre", "rps_post", "logloss_pre", "logloss_post", "tails"} <= set(row)

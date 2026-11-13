@@ -7,6 +7,7 @@ nie są dostępne historycznie, więc w teście wstecznym czynniki od nich zale�
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -185,6 +186,15 @@ class RaceLevels:
     rps_post: float           # prognoza po kwalifikacjach (znana siatka)
     rps_quali: float | None   # przewidziana kolejność kwalifikacji; None bez danych
     brier_win_post: float     # dotychczasowa miara (zwycięzca) jako wskaźnik pomocniczy
+    logloss_win_pre: float = 0.0    # log-strata zwycięzcy (dolne ograniczenie 0,001): karze zbyt cienkie ogony
+    logloss_win_post: float = 0.0
+
+
+def winner_logloss(prediction: list[DriverProbability], actual_finish: dict[str, int | None]) -> float:
+    """-ln(prognoza dla faktycznego zwycięzcy), z dolnym ograniczeniem 0,001 (prognoza zero nie daje nieskończonej kary)."""
+    winner = next(d for d, f in actual_finish.items() if f == 1)
+    p = next((x.win for x in prediction if x.driver_id == winner), 0.0)
+    return -math.log(max(p, 0.001))
 
 
 def evaluate_quali(case: RoundCase, weights: dict[str, float], n: int, separate: bool = True) -> float | None:
@@ -207,6 +217,7 @@ def evaluate_levels(cases: list[RoundCase], weights: dict[str, float], n: int = 
         out.append(RaceLevels(
             round=case.round, rps_pre=ranking_rps(pre, case.actual_finish), rps_post=ranking_rps(post, case.actual_finish),
             rps_quali=quali, brier_win_post=evaluate(case.round, post, case.actual_finish).brier_win,
+            logloss_win_pre=winner_logloss(pre, case.actual_finish), logloss_win_post=winner_logloss(post, case.actual_finish),
         ))
     return out
 

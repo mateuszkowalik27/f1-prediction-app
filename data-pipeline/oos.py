@@ -19,7 +19,9 @@ import config
 from dataclasses import replace
 from typing import Literal
 
-from evaluation import RaceLevels, RoundCase, evaluate_levels, evaluate_quali, prepare_seasons, score_rounds
+from evaluation import (
+    RaceLevels, RoundCase, _predict_case, evaluate_levels, evaluate_quali, prepare_seasons, score_rounds,
+)
 from factors.rating_race import RatingRace
 from scoring import Diff, paired_bootstrap, verdict
 from history_store import HistoryStore
@@ -153,6 +155,47 @@ def rating_scan(cases: list[RoundCase], weights: dict[str, float], grid: list[di
     return out
 
 
+def tail_report(cases: list[RoundCase], weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING) -> dict[str, dict]:
+    """Czy ogony są uczciwe? Dla prognoz przed i po kwalifikacjach: ile wyścigów wygrał kierowca z szansą < 2%
+    (faktycznie vs ile wynika z prognoz) oraz czy faworyci (> 35%) wygrywają tak często, jak im się przypisuje."""
+    out = {}
+    for level, known in (("pre", False), ("post", True)):
+        expected = actual = fav_n = fav_hits = 0
+        fav_pred = 0.0
+        for case in cases:
+            winner = next(d for d, f in case.actual_finish.items() if f == 1)
+            for p in _predict_case(case, weights, n, grid_known=known):
+                if p.win < 0.02:
+                    expected += p.win
+                    actual += p.driver_id == winner
+                elif p.win > 0.35:
+                    fav_n += 1
+                    fav_pred += p.win
+                    fav_hits += p.driver_id == winner
+        out[level] = {"races": len(cases), "longshot_expected": float(expected), "longshot_actual": int(actual),
+                      "fav_n": fav_n, "fav_pred": fav_pred / fav_n if fav_n else 0.0,
+                      "fav_actual": fav_hits / fav_n if fav_n else 0.0}
+    return out
+
+
+def noise_scan(cases: list[RoundCase], weights: dict[str, float], grid: list[dict[str, float]],
+               n: int = config.N_SIMULATIONS_TUNING) -> dict[tuple, dict]:
+    """Dla kombinacji parametrów losowości: średni RPS (trzy poziomy), log-strata zwycięzcy i diagnostyka ogonów."""
+    out = {}
+    for params in grid:
+        w = {**weights, **params}
+        levels = evaluate_levels(cases, w, n)
+        quali = [x.rps_quali for x in levels if x.rps_quali is not None]
+        out[tuple(sorted(params.items()))] = {
+            "rps_pre": float(mean(x.rps_pre for x in levels)), "rps_post": float(mean(x.rps_post for x in levels)),
+            "rps_quali": float(mean(quali)) if quali else None,
+            "logloss_pre": float(mean(x.logloss_win_pre for x in levels)),
+            "logloss_post": float(mean(x.logloss_win_post for x in levels)),
+            "tails": tail_report(cases, w, n),
+        }
+    return out
+
+
 def level_report(
     cases_by_season: dict[int, list[RoundCase]], test_seasons: list[int], base: dict[str, float],
     bounds: dict[str, tuple[float, float]], locked: set[str], n: int = config.N_SIMULATIONS_TUNING,
@@ -228,6 +271,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=Path("public/data"))
     parser.add_argument("--factor", default=None)
     parser.add_argument("--variant", default=None, choices=sorted(VARIANTS), help="bramka wariantu wag (VARIANTS)")
+    parser.add_argument("--scan-noise", action="store_true",
+                        help="dobór losowości (wspólny los zespołu, chaos): sezony 2022-2023 (wybór) i testowe (kontrola)")
     parser.add_argument("--scan-ratings", action="store_true",
                         help="dobór hiperparametrów ocen: sezony 2022-2023 (wybór) i testowe (kontrola)")
     parser.add_argument("--scan-quali-noise", action="store_true",
@@ -249,6 +294,20 @@ def main(argv: list[str] | None = None) -> int:
         for name, d in diffs.items():
             print(f"  {name:6s} {d.mean:+.5f}  [{d.lo:+.5f}, {d.hi:+.5f}]  n={d.n}  -> {verdict(d)}")
         print("DECYZJA:", {"keep": "WCHODZI", "drop": "WYPADA", "inconclusive": "NIEJEDNOZNACZNE (zostaje stan dotychczasowy)"}[result])
+        return 0
+    if args.scan_noise:
+        grid = [{"team_noise_share": ts, "chaos_base": cb, "chaos_mult": cm}
+                for ts in (0.0, 0.2, 0.4) for cb in (0.0, 0.1, 0.2) for cm in (1.5, 2.0, 3.0) if not (cb == 0.0 and cm != 2.0)]
+        for label, seasons in (("trening 2022-2023", [2022, 2023]), ("test 2024-2026", test_seasons)):
+            cases = [c for s_ in seasons for c in by_season.get(s_, [])]
+            print(f"\nLosowość ({label}, {len(cases)} wyścigów): suma RPS (przed+po+kwal.) | log-strata zw. przed/po | ogony przed: skreśleni wygrali / oczekiwano, faworyci prognoza / faktycznie")
+            scan = noise_scan(cases, base, grid, args.n)
+            rows = sorted(scan.items(), key=lambda kv: kv[1]["rps_pre"] + kv[1]["rps_post"] + (kv[1]["rps_quali"] or 0))
+            for params, v in rows[:10]:
+                t = v["tails"]["pre"]
+                total = v["rps_pre"] + v["rps_post"] + (v["rps_quali"] or 0)
+                print(f"  {dict(params)}  {total:.4f} | {v['logloss_pre']:.3f}/{v['logloss_post']:.3f} | "
+                      f"{t['longshot_actual']} / {t['longshot_expected']:.1f}, {t['fav_pred']:.2f} / {t['fav_actual']:.2f}")
         return 0
     if args.scan_ratings:
         grid = [{"eta_car": ec, "eta_driver": ed, "car_keep": ck}
