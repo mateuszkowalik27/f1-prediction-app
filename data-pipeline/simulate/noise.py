@@ -31,3 +31,9 @@ def draw_noise(rng: np.random.Generator, n: int, drivers: list[str], sigma: floa
         scale = np.where(rng.random(n) < chaos_prob, chaos_mult, 1.0)[:, None]
         noise = noise * scale
     return noise
+
+
+def chaos_prob_from(weights: dict[str, float], sc: float = 0.0, rain: float = 0.0) -> float:
+    """Prawdopodobieństwo chaosu w wyścigu: baza + składnik od ryzyka safety cara i szansy deszczu, w granicach [0, 0,6]."""
+    p = weights.get("chaos_base", 0.0) + weights.get("chaos_sc", 0.0) * sc + weights.get("chaos_rain", 0.0) * rain
+    return float(min(max(p, 0.0), 0.6))

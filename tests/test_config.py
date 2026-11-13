@@ -33,3 +33,9 @@ def test_quali_gap_serves_qualifying_not_the_race():
 def test_qualifying_weights_and_noise_are_not_touched_by_the_tuner():
     assert "quali_noise" in config.LOCKED_WEIGHTS
     assert not any(k.startswith("q_") for k in config.WEIGHT_BOUNDS)
+
+
+def test_noise_parameters_are_weights_and_locked_from_the_tuner():
+    w = config.default_weights()
+    for key in ("team_noise_share", "chaos_base", "chaos_sc", "chaos_rain", "chaos_mult"):
+        assert key in w and key in config.LOCKED_WEIGHTS and key not in config.WEIGHT_BOUNDS

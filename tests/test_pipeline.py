@@ -503,3 +503,28 @@ def test_weekend_context_gets_a_long_history_for_the_ratings(tmp_path, monkeypat
     run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
     assert seen["long"] and {h.season for h in seen["long"]} >= {2026, 2027}
     assert all((h.season, h.round) < (2027, 3) for h in seen["long"])               # przewidujemy rundę 3
+
+
+def test_noise_options_reach_both_simulations(tmp_path, monkeypatch):
+    import run as run_module
+    seen = {}
+    real_quali, real_race = run_module.predict_qualifying, run_module.simulate_race
+
+    def spy_quali(strength, *a, **kw):
+        seen["quali"] = kw
+        return real_quali(strength, *a, **kw)
+
+    def spy_race(strength, grid, *a, **kw):
+        seen["race"] = kw
+        return real_race(strength, grid, *a, **kw)
+
+    monkeypatch.setattr(run_module, "predict_qualifying", spy_quali)
+    monkeypatch.setattr(run_module, "simulate_race", spy_race)
+    monkeypatch.setattr(config, "TEAM_NOISE_SHARE", 0.4)
+    monkeypatch.setattr(config, "CHAOS_BASE", 0.1)
+    monkeypatch.setattr(config, "CHAOS_SC", 0.2)
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
+    for side in ("quali", "race"):
+        assert seen[side]["team_share"] == 0.4 and seen[side]["teams"]
+    assert seen["quali"]["chaos_prob"] == pytest.approx(0.1)                          # kwalifikacje: bez składnika safety cara
+    assert seen["race"]["chaos_prob"] > 0.1                                          # wyścig: baza + składnik od ryzyka safety cara

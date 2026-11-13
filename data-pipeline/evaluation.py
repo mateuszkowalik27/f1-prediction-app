@@ -26,6 +26,7 @@ from schemas import (
     DriverEntry, DriverProbability, Race, RaceAggregates, RaceEvaluation, TrackStats, WeatherForecast,
 )
 from scoring import ranking_rps
+from simulate.noise import chaos_prob_from
 from simulate.qualifying import predict_qualifying
 from simulate.race import apply_early_season, simulate_race
 from simulate.strategy import predict_strategy
@@ -139,6 +140,16 @@ def prepare_seasons(seasons: list[int], clients: "Clients", aggregates: Sequence
     return by_season
 
 
+def _noise_options(case: RoundCase, weights: dict[str, float], race: bool) -> dict:
+    """Wspólny wstrząs zespołu i chaos z wag (model v3, etap 4); chaos wyścigu zależy też od ryzyka safety cara toru."""
+    rain = case.ctx.weather.rain_probability if case.ctx.weather else 0.0
+    sc = case.sim_track.sc_probability if race else 0.0
+    return {"teams": {e.driver_id: e.team_id for e in case.ctx.entries},
+            "team_share": weights.get("team_noise_share", config.TEAM_NOISE_SHARE),
+            "chaos_prob": chaos_prob_from(weights, sc=sc, rain=rain),
+            "chaos_mult": weights.get("chaos_mult", config.CHAOS_MULT)}
+
+
 LEGACY_SHARED_QUALI_GAP = 0.10   # waga quali_gap w dawnym, wspólnym trybie (przed etapem 2 modelu v3), do porównań A/B
 
 
@@ -156,12 +167,13 @@ def _predict_case(case: RoundCase, weights: dict[str, float], n: int, grid_known
                   separate: bool = True) -> list[DriverProbability]:
     """`grid_known=False`: prognoza sprzed kwalifikacji (siatka losowana w każdej symulacji, z siły kwalifikacyjnej)."""
     race_strength, quali_strength = _strengths(case, weights, separate)
+    noise = _noise_options(case, weights, race=True)
     return simulate_race(
         race_strength, case.ctx.grid if grid_known else None, case.sim_track, case.dnf, case.stops, n=n,
         grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),
         noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
         qualifying_noise=(weights.get("quali_noise", config.QUALIFYING_NOISE) if separate else config.QUALIFYING_NOISE),
-        quali_strength=quali_strength if separate else None,
+        quali_strength=quali_strength if separate else None, **noise,
     )
 
 
@@ -181,7 +193,8 @@ def evaluate_quali(case: RoundCase, weights: dict[str, float], n: int, separate:
         return None
     _, quali_strength = _strengths(case, weights, separate)
     noise = weights.get("quali_noise", config.QUALIFYING_NOISE) if separate else config.QUALIFYING_NOISE
-    return ranking_rps(predict_qualifying(quali_strength, n=n, noise=noise).probabilities, case.actual_quali)
+    return ranking_rps(predict_qualifying(quali_strength, n=n, noise=noise,
+                                          **_noise_options(case, weights, race=False)).probabilities, case.actual_quali)
 
 
 def evaluate_levels(cases: list[RoundCase], weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,

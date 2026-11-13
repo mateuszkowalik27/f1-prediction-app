@@ -66,7 +66,8 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "grid_base_weight": (0.3, 1.6),
     "race_noise_base": (0.3, 1.5),
 }
-LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit", "pit_stop", "quali_gap", "quali_noise", "rating_quali"}   # wagi, których robot nie rusza
+LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit", "pit_stop", "quali_gap", "quali_noise", "rating_quali",
+                            "team_noise_share", "chaos_base", "chaos_sc", "chaos_rain", "chaos_mult"}   # wagi, których robot nie rusza
 TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
 USE_TUNED_WEIGHTS = False          # robot używa wag bazowych; strojenie (walk-forward, oos.py) zostaje jako narzędzie do porównań
 
@@ -106,7 +107,8 @@ def default_weights() -> dict[str, float]:
     """Wagi czynników oraz siła startu i poziom losowości: punkt wyjścia dla auto-wag."""
     quali = {f"q_{name}": QUALI_FACTOR_WEIGHTS.get(name, 0.0) for name in FACTOR_WEIGHTS}
     return {**FACTOR_WEIGHTS, **quali, "grid_base_weight": GRID_BASE_WEIGHT, "race_noise_base": RACE_NOISE_BASE,
-            "quali_noise": QUALIFYING_NOISE}
+            "quali_noise": QUALIFYING_NOISE, "team_noise_share": TEAM_NOISE_SHARE, "chaos_base": CHAOS_BASE,
+            "chaos_sc": CHAOS_SC, "chaos_rain": CHAOS_RAIN, "chaos_mult": CHAOS_MULT}
 PIT_OUTLIER_RATIO = 1.5   # postój dłuższy niż 1,5 x mediana wyścigu (czerwona flaga, kara) nie liczy się
 FUEL_EFFECT_S_PER_LAP = 0.035   # o tyle szybsze jest auto z każdym okrążeniem (spalone paliwo); korekta przy liczeniu zużycia opon
 MIN_STINT_LAPS = 8              # krótszych stintów nie używamy do zużycia opon
@@ -195,3 +197,10 @@ RATING_QUALI_DRIVER_K = 6    # ściąganie poprawki kierowcy (względem kolegi) 
 #   rating_quali_plus (pół na pół z quali_gap): przed +0,0003, kwal. +0,0003, oba nieoznaczone -> stan dotychczasowy (rating_quali waga 0, LOCKED).
 #   Wniosek: prosta średnia straty kierowcy (quali_gap) jest w kwalifikacjach lepsza niż rozkład na auto i kierowcę.
 # Punkt odniesienia po etapie 3 v3 (2026-11-13, wagi bazowe, średni RPS): przed kwal. 0,1203, po kwal. 0,1147, kwalifikacje 0,1066.
+
+# Losowość symulacji (model v3, etap 4): wspólny wstrząs zespołu i chaos (mieszanka). Zerowe = zachowanie sprzed etapu 4.
+TEAM_NOISE_SHARE = 0.0   # jaka część losowości kierowcy jest wspólna dla zespołu (0-1)
+CHAOS_BASE = 0.0         # bazowe prawdopodobieństwo "chaosu" w wyścigu / kwalifikacjach
+CHAOS_SC = 0.0           # dodatek do tego prawdopodobieństwa za ryzyko safety cara toru (tylko wyścig)
+CHAOS_RAIN = 0.0         # dodatek za szansę deszczu
+CHAOS_MULT = 2.0         # ile razy większa jest losowość w symulacji z chaosem

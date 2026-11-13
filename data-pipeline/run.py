@@ -37,6 +37,7 @@ from schemas import (
     GridPenalty, SafetyCarOdds, SeasonScore, Session, TrackProfile, WeatherForecast, WeekendPayload, WeekendResponse, WetCache,
     WeightsFile,
 )
+from simulate.noise import chaos_prob_from
 from simulate.qualifying import predict_qualifying
 from simulate.race import apply_early_season, simulate_race
 from simulate.strategy import predict_strategy
@@ -244,7 +245,12 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     quali_combined = combine_side(ctx, ALL_FACTORS, weights, "quali")     # siła kwalifikacyjna (jedno okrążenie)
     drivers = [e.driver_id for e in entries]
 
-    quali = predict_qualifying(quali_combined.strength, noise=weights.get("quali_noise", config.QUALIFYING_NOISE))
+    rain = weather.rain_probability if weather else 0.0
+    teams = {e.driver_id: e.team_id for e in entries}
+    noise = {"teams": teams, "team_share": weights.get("team_noise_share", config.TEAM_NOISE_SHARE),
+             "chaos_mult": weights.get("chaos_mult", config.CHAOS_MULT)}
+    quali = predict_qualifying(quali_combined.strength, noise=weights.get("quali_noise", config.QUALIFYING_NOISE),
+                               chaos_prob=chaos_prob_from(weights, sc=0.0, rain=rain), **noise)
     quali_rows = _actual_quali_rows(start_grid.quali, drivers) if start_grid else quali.probabilities
     dnf, sim_track = apply_early_season(dnf_rates(ctx), track, race.round)
     strategy = predict_strategy(track, weather, tyre, track_deg_ratio(ctx))
@@ -254,6 +260,7 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
         noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
         qualifying_noise=weights.get("quali_noise", config.QUALIFYING_NOISE),
         quali_strength=quali_combined.strength,     # siatka przed kwalifikacjami losowana z siły kwalifikacyjnej
+        chaos_prob=chaos_prob_from(weights, sc=sim_track.sc_probability, rain=rain), **noise,
     )
     sources = {
         "open_meteo": "failed" if weather_failed else ("ok" if weather else "missing"),

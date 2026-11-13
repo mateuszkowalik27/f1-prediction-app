@@ -36,3 +36,11 @@ def test_driver_missing_from_teams_gets_his_own_shock_and_prob_is_clamped():
     assert abs(np.corrcoef(x[:, 1], x[:, 2])[0, 1]) < 0.1                      # b i c bez zespołu: niezależni
     y = draw_noise(rng(), 100, DRIVERS, 0.5, TEAMS, team_share=5.0, chaos_prob=2.0, chaos_mult=2.0)
     assert np.isfinite(y).all()                                                # wartości spoza zakresu nie psują losowania
+
+
+def test_chaos_probability_combines_the_inputs_and_is_clamped():
+    from simulate.noise import chaos_prob_from
+    w = {"chaos_base": 0.05, "chaos_sc": 0.2, "chaos_rain": 0.3}
+    assert chaos_prob_from(w, sc=0.5, rain=0.4) == pytest.approx(0.05 + 0.1 + 0.12)
+    assert chaos_prob_from({"chaos_base": 0.5, "chaos_sc": 1.0, "chaos_rain": 1.0}, sc=1.0, rain=1.0) == 0.6      # górna granica
+    assert chaos_prob_from({}, sc=0.9, rain=0.9) == 0.0                                                          # domyślnie wyłączony
