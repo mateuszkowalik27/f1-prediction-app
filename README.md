@@ -184,6 +184,23 @@ Prosta średnia straty kierowcy (`quali_gap`) okazała się w kwalifikacjach lep
 na sezonach 2022-2023 (krajobraz płaski: różnice ~0,0001 RPS). Wagi wyścigu: `rating_race` 0,17, `pace_race` 0,10, `car_pace` 0,12,
 `driver_form` 0,06. Punkt odniesienia po etapie 3 (średni RPS, wagi bazowe): przed kwal. 0,1203, po kwal. 0,1147, kwalifikacje 0,1066.
 
+### Etap 4: chaos i wspólny los zespołu
+
+Symulacja miała cienkie ogony: kierowca z prognozą poniżej 2% wygrał w 68 testowych wyścigach po kwalifikacjach 6 razy, a prognozy
+dawały ok. 0,7 takiego zwycięstwa. Dodano **chaos** (w 20% symulacji wyścigu cała losowość jest 3 razy większa: deszcz, safety car,
+kolizje na starcie) i parametr **wspólnego losu zespołu** (kod gotowy, ale wyłączony).
+
+| Wariant (chaos tylko w wyścigu) | po kwal. (RPS, wariant - baza) | przed kwal. | werdykt |
+|---|---|---|---|
+| chaos 0,2 x3 (**używa robot**) | **-0,0022** [-0,0026; -0,0019] | -0,0001 (bez różnicy) | wchodzi |
+| chaos 0,1 x3 | -0,0012 [-0,0014; -0,0010] | -0,0001 | wchodzi |
+
+Po zmianie kierowcy z szansą poniżej 2% wygrywają 2 razy przy ok. 1,6 oczekiwanych (przed: 6 przy 0,7), a log-strata zwycięzcy po
+kwalifikacjach spada z 1,313 do 1,282. Chaos w kwalifikacjach pogarszał wynik, więc tam go nie ma. Wspólny los zespołu nie zmienia
+rozkładów brzegowych pojedynczego kierowcy, więc używanymi miarami (RPS, log-strata) nie da się go zweryfikować: zostaje wyłączony
+(`TEAM_NOISE_SHARE = 0`). Kalibracja `tau` przesunęła się z 0,70 do 0,90, czyli model jest po tej zmianie mniej zbyt pewny siebie.
+Punkt odniesienia po etapie 4 (średni RPS): przed kwal. 0,1202, po kwal. 0,1125, kwalifikacje 0,1066.
+
 ## Wyniki sesji w Kalendarzu
 
 Po rozwinięciu rundy zakończone sesje mają przycisk „Wyniki": treningi i kwalifikacje sprintu (najlepszy czas
