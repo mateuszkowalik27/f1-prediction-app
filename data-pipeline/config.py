@@ -38,7 +38,7 @@ QUALI_FACTOR_WEIGHTS: dict[str, float] = {
 # poprawa jest taka sama w obu połówkach sezonu (R1-10: 0,0356 -> 0,0229, R11-20: 0,0367 -> 0,0263).
 GRID_BASE_WEIGHT = 0.9    # ile tempa kosztuje jedno miejsce na starcie (na torze o trudności 1)
 RACE_NOISE_BASE = 0.5     # poziom losowości wyścigu
-QUALIFYING_NOISE = 0.8    # losowość kwalifikacji (jeszcze niedostrojona: brak historycznych wyników kwalifikacji w teście)
+QUALIFYING_NOISE = 0.7    # losowość kwalifikacji; wybrana na sezonach 2022-2023 (min RPS kwalifikacji), na testowych 2024-2026 też blisko optimum (0,6-0,7)
 SC_NOISE_FACTOR = 0.5     # ile chaosu dodaje wysokie ryzyko safety cara
 PIT_NOISE = 0.1           # ile chaosu dodaje każdy pit-stop
 
