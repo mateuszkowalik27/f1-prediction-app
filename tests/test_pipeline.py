@@ -581,3 +581,9 @@ def openf1_with(signals):
     f1 = FakeOpenF1()
     f1.signals = signals
     return f1
+
+
+def test_robot_warns_about_a_season_without_an_engine_table_but_keeps_going(tmp_path, capsys):
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
+    assert "ENGINE_SUPPLIER" in capsys.readouterr().err                      # sezon 2027 nie ma tabeli silników
+    assert (tmp_path / "weekend.json").exists()

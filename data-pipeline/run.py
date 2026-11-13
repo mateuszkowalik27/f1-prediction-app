@@ -28,6 +28,7 @@ from factors.tyre_deg_fit import track_deg_ratio
 from evaluation import RoundCase, evaluate, prepare_rounds, score_rounds
 from fetch.jolpica import JolpicaClient, JolpicaError
 from history_store import HistoryStore
+from engines import coverage_warnings
 from results import update_results
 from scoring import ranking_rps
 from fetch.openf1 import OpenF1Client
@@ -252,6 +253,8 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     ctx = build_context(race, entries, history, circuit_history, wet, weather, practice, None, track,
                         profiles.get(race.circuit_id), profiles, as_of_round=race.round, aggregates=aggregates,
                         long_history=older + history, signals=signals)
+    for warning in coverage_warnings(season, {e.team_id for e in entries}):
+        print(f"UWAGA: {warning}", file=sys.stderr)       # tabela silników jest ręczna: nie przerywamy, tylko ostrzegamy
     drivers = [e.driver_id for e in entries]
     rain = weather.rain_probability if weather else 0.0
     teams = {e.driver_id: e.team_id for e in entries}

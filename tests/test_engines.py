@@ -33,3 +33,12 @@ def test_rebrands_point_to_the_predecessor():
 def test_unknown_team_or_season_gives_none_and_uncovered_lists_the_gaps():
     assert supplier_of(2026, "nowy_zespol") is None and supplier_of(1999, "mercedes") is None
     assert uncovered_teams(2026, ["mercedes", "nowy_zespol"]) == ["nowy_zespol"]
+
+
+def test_coverage_warnings_name_the_missing_season_or_the_missing_teams():
+    from engines import coverage_warnings
+    assert coverage_warnings(2026, TEAMS_2026) == []
+    (season_warning,) = coverage_warnings(2031, ["mercedes", "ferrari"])
+    assert "2031" in season_warning and "ENGINE_SUPPLIER" in season_warning
+    (team_warning,) = coverage_warnings(2026, ["mercedes", "nowy_zespol"])
+    assert "nowy_zespol" in team_warning and "ENGINE_SUPPLIER" in team_warning
