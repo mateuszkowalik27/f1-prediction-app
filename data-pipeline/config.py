@@ -8,8 +8,8 @@ RANDOM_SEED = 2027
 
 # Wagi czynników (auto-wagi mogą je ostrożnie zmieniać w granicach WEIGHT_BOUNDS).
 FACTOR_WEIGHTS: dict[str, float] = {
-    "car_pace": 0.30,
-    "driver_form": 0.15,
+    "car_pace": 0.12,       # etap 3 v3: część punktów zastąpiona ocenami i czystym tempem (wariant v3_core, bramka niżej)
+    "driver_form": 0.06,
     "track_history": 0.10,
     "practice_pace": 0.15,
     "weekend_shift": 0.10,
@@ -21,8 +21,8 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "race_vs_quali": 0.0,   # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "tyre_deg_fit": 0.0,    # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "temp_fit": 0.0,        # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
-    "pace_race": 0.0,       # model v3, etap 3: czyste tempo okrążeń; waga po bramce (komentarz na dole)
-    "rating_race": 0.0,     # model v3, etap 3: ocena Plackett-Luce auto + kierowca; waga po bramce (komentarz na dole)
+    "pace_race": 0.10,      # model v3, etap 3: czyste tempo okrążeń (od 2023; brak = czynnik pominięty)
+    "rating_race": 0.17,    # model v3, etap 3: ocena Plackett-Luce auto + kierowca
 }
 # Wagi siły KWALIFIKACYJNEJ (jedno okrążenie); zasila przewidywanie kwalifikacji i losowanie siatki przed kwalifikacjami.
 # Ustawione ręcznie, nie strojone automatycznie. `quali_gap` jest tu głównym składnikiem (po kwalifikacjach nie wchodzi do wyścigu).
@@ -182,3 +182,9 @@ RATING_ETA_CAR = 0.1        # tempo uczenia oceny auta po wyścigu (wybrane na 2
 RATING_ETA_DRIVER = 0.03    # tempo uczenia poprawki kierowcy (wolniej niż auto: kierowca zmienia się wolniej)
 RATING_CAR_KEEP = 0.8       # ile oceny auta zostaje na początku nowego sezonu (auta się zmieniają)
 RATING_DRIVER_KEEP = 0.9    # ile poprawki kierowcy zostaje na początku nowego sezonu
+# Bramka etapu 3 v3 (RPS wariant - baza, przedział 90%; ujemna = wariant lepszy), 2026-11-13, 68 wyścigów testowych:
+#   rating_race (oceny zamiast punktów): przed -0,0002 [-0,0006; +0,0001], po +0,0000 -> nieoznaczone (równe punktom).
+#   rating_race_plus (oceny + połowa starych): przed -0,0002 [-0,0004; -0,00003] BETTER, po -0,0001 [-0,0003; +0,0001].
+#   pace_race (czyste tempo kosztem części punktów): przed -0,0002 [-0,0002; -0,0001] BETTER, po -0,0001 [-0,0002; +0,0001].
+#   v3_core (oceny 0,17 + tempo 0,10 + po połowie starych punktów): przed -0,0003 [-0,0005; -0,0001] BETTER, po -0,0001 -> WCHODZI.
+#   Efekt jest mały (ok. 0,3% RPS przed kwalifikacjami), ale jednoznaczny kierunkowo i bez pogorszenia po kwalifikacjach.
