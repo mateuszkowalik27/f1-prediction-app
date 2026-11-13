@@ -13,9 +13,12 @@ from urllib.parse import quote
 
 import httpx
 
+from aggregates import compute_race_pace
+from weekend_signals import gap_percent, long_run_pace, quali_sim_pace
+
 from schemas import (
     DriverEntry, HistoricRace, LapRecord, PracticeData, Race, SafetyEvent, SessionRow, SessionTable, TyreHistory,
-    WeatherSample,
+    WeatherSample, WeekendSignals,
 )
 
 BASE_URL = "https://api.openf1.org/v1"
@@ -201,38 +204,81 @@ class OpenF1Client:
         found = [s for s in self._sessions(day, before=0, after=0) if s["session_name"] == "Race"]
         return found[0]["session_key"] if found else None
 
+    def _session_laps(self, key: int, entries: list[DriverEntry]) -> list[LapRecord]:
+        """Okrążenia dowolnej sesji z mieszanką i wiekiem opon (z /stints). Błędy API propaguje do wołającego."""
+        code_to_id = {e.code: e.driver_id for e in entries}
+        num_to_id = {d["driver_number"]: code_to_id.get(d["name_acronym"])
+                     for d in self._get("/drivers", {"session_key": key})}
+        stints: dict[int, list[dict]] = defaultdict(list)
+        for st in self._get("/stints", {"session_key": key}):
+            stints[st["driver_number"]].append(st)
+        records = []
+        for row in self._get("/laps", {"session_key": key}):
+            driver_id = num_to_id.get(row.get("driver_number"))
+            if not driver_id:
+                continue
+            compound = tyre_age = None
+            for st in stints.get(row["driver_number"], []):
+                end = st.get("lap_end") or 10_000   # 0/None = stint jeszcze trwa
+                if st["lap_start"] <= row["lap_number"] <= end:
+                    compound = st.get("compound")
+                    tyre_age = (st.get("tyre_age_at_start") or 0) + (row["lap_number"] - st["lap_start"])
+                    break
+            records.append(LapRecord(
+                driver_id=driver_id, lap=row["lap_number"], duration_s=row.get("lap_duration"),
+                is_pit_out=bool(row.get("is_pit_out_lap")), compound=compound, tyre_age=tyre_age,
+            ))
+        return records
+
     def race_laps(self, race: Race, entries: list[DriverEntry]) -> list[LapRecord] | None:
         """Okrążenia sesji Race z mieszanką i wiekiem opon (z /stints). Brak danych lub błąd -> None."""
         try:
             key = self._race_session_key(race)
             if key is None:
                 return None
-            code_to_id = {e.code: e.driver_id for e in entries}
-            num_to_id = {d["driver_number"]: code_to_id.get(d["name_acronym"])
-                         for d in self._get("/drivers", {"session_key": key})}
-            stints: dict[int, list[dict]] = defaultdict(list)
-            for st in self._get("/stints", {"session_key": key}):
-                stints[st["driver_number"]].append(st)
-            records = []
-            for row in self._get("/laps", {"session_key": key}):
-                driver_id = num_to_id.get(row.get("driver_number"))
-                if not driver_id:
-                    continue
-                compound = tyre_age = None
-                for st in stints.get(row["driver_number"], []):
-                    end = st.get("lap_end") or 10_000   # 0/None = stint jeszcze trwa
-                    if st["lap_start"] <= row["lap_number"] <= end:
-                        compound = st.get("compound")
-                        tyre_age = (st.get("tyre_age_at_start") or 0) + (row["lap_number"] - st["lap_start"])
-                        break
-                records.append(LapRecord(
-                    driver_id=driver_id, lap=row["lap_number"], duration_s=row.get("lap_duration"),
-                    is_pit_out=bool(row.get("is_pit_out_lap")), compound=compound, tyre_age=tyre_age,
-                ))
-            return records or None
+            return self._session_laps(key, entries) or None
         except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
             self.errors += 1
             return None
+
+    # --- model v3, etap 5: sygnały z sesji bieżącego weekendu ---
+    def weekend_signals(self, race: Race, entries: list[DriverEntry]) -> WeekendSignals | None:
+        """Tempo z długich przejazdów FP2, symulacja kwalifikacji z FP3, tempo ze sprintu i strata w kwalifikacjach sprintu.
+        Każda sesja osobno: błąd jednej (liczony w `errors`) nie psuje pozostałych. Wszystko puste -> None."""
+        try:
+            day = _race_day(race)
+            if day is None:
+                return None
+            keys = {s["session_name"]: s["session_key"] for s in self._sessions(day)}
+        except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
+            self.errors += 1
+            return None
+
+        def safely(name: str, build):
+            if name not in keys:
+                return {}
+            try:
+                return build(keys[name])
+            except (OpenF1Unavailable, httpx.HTTPError, KeyError, ValueError, TypeError):
+                self.errors += 1
+                return {}
+
+        def sq_gap(key: int) -> dict[str, float]:
+            code_to_id = {e.code: e.driver_id for e in entries}
+            num_to_id = {d["driver_number"]: code_to_id.get(d["name_acronym"])
+                         for d in self._get("/drivers", {"session_key": key})}
+            table = self._qualifying_table(key, num_to_id)
+            best = {r.driver_id: min(t for t in (r.q1, r.q2, r.q3) if t) for r in (table.rows if table else [])
+                    if any((r.q1, r.q2, r.q3))}
+            return gap_percent(best)
+
+        signals = WeekendSignals(
+            long_run=safely("Practice 2", lambda k: long_run_pace(self._session_laps(k, entries))),
+            quali_sim=safely("Practice 3", lambda k: quali_sim_pace(self._session_laps(k, entries))),
+            sprint_pace=safely("Sprint", lambda k: compute_race_pace(self._session_laps(k, entries))),
+            sq_gap=safely("Sprint Qualifying", sq_gap),
+        )
+        return signals if any((signals.long_run, signals.quali_sim, signals.sprint_pace, signals.sq_gap)) else None
 
     def race_weather(self, race: Race) -> WeatherSample | None:
         """Mediana temperatury powietrza i toru w trakcie sesji Race albo None."""

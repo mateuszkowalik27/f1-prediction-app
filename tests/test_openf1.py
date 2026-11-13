@@ -311,3 +311,58 @@ def test_sprint_qualifying_falls_back_to_best_laps_without_session_result():
     tables = make_client(sprint_quali_routes([])).best_laps(race(), ENTRIES)
     sq = tables["SprintQualifying"]
     assert sq.kind == "practice" and sq.rows[0].best_s == 80.5
+
+
+# --- sygnały z sesji weekendu (model v3, etap 5) ---
+def _stint_row(number, start, end, compound="MEDIUM"):
+    return {"driver_number": number, "stint_number": 1, "lap_start": start, "lap_end": end, "compound": compound,
+            "tyre_age_at_start": 0}
+
+
+def weekend_routes(sessions, laps_by_key, results=None, broken=()):
+    def by_key(q, table):
+        key = int(q.split("session_key=")[1].split("&")[0])
+        if key in broken:
+            return (500, {"detail": "boom"})
+        return (200, table(key))
+
+    return {
+        "/sessions": lambda q: (200, sessions),
+        "/drivers": lambda q: (200, [{"driver_number": 16, "name_acronym": "LEC"}, {"driver_number": 1, "name_acronym": "VER"}]),
+        "/stints": lambda q: by_key(q, lambda k: [_stint_row(16, 3, 12), _stint_row(1, 3, 12)]),
+        "/laps": lambda q: by_key(q, lambda k: laps_by_key[k]),
+        "/session_result": lambda q: (200, results or []),
+    }
+
+
+def run_laps(lec, ver, count=8):
+    rows = []
+    for i in range(count):
+        rows.append(lap(3 + i, 16, lec))
+        rows.append(lap(3 + i, 1, ver))
+    return rows
+
+
+def test_weekend_signals_read_each_session_into_its_own_signal():
+    sessions = [sess(2, "Practice 2", "2024-05-24"), sess(3, "Practice 3", "2024-05-25"), sess(4, "Sprint", "2024-05-25"),
+                sess(5, "Sprint Qualifying", "2024-05-24"), sess(9, "Race", "2024-05-26")]
+    laps = {2: run_laps(90.0, 91.0), 3: run_laps(80.0, 80.5), 4: run_laps(88.0, 89.0), 5: []}
+    results = [{"position": 1, "driver_number": 16, "duration": [93.0, 92.2, 91.5]},
+               {"position": 2, "driver_number": 1, "duration": [93.4, 92.9, 92.4]}]
+    signals = make_client(weekend_routes(sessions, laps, results)).weekend_signals(race(), ENTRIES)
+    assert signals.long_run["leclerc"] < 0 < signals.long_run["max_verstappen"]
+    assert signals.quali_sim["leclerc"] < signals.quali_sim["max_verstappen"]
+    assert signals.sprint_pace["leclerc"] < signals.sprint_pace["max_verstappen"]
+    assert signals.sq_gap["leclerc"] == 0 and signals.sq_gap["max_verstappen"] > 0
+
+
+def test_weekend_without_practice_sessions_gives_none():
+    sessions = [sess(9, "Race", "2024-05-26")]
+    assert make_client(weekend_routes(sessions, {})).weekend_signals(race(), ENTRIES) is None
+
+
+def test_one_failing_session_does_not_spoil_the_others():
+    sessions = [sess(2, "Practice 2", "2024-05-24"), sess(3, "Practice 3", "2024-05-25"), sess(9, "Race", "2024-05-26")]
+    client = make_client(weekend_routes(sessions, {2: run_laps(90.0, 91.0), 3: run_laps(80.0, 80.5)}, broken=(3,)))
+    signals = client.weekend_signals(race(), ENTRIES)
+    assert signals.long_run and not signals.quali_sim and client.errors >= 1
