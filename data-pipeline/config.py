@@ -227,3 +227,23 @@ PRACTICE_LONGRUN_MIN_LAPS = 5   # tyle czystych okrążeń na jednej mieszance t
 # Etap 5 v3 (2026-11-14): fp2_long_run 0,10 i sprint_pace 0,10 (siła wyścigowa), q_fp3_quali_sim 0,12 i q_sq_quali 0,15 (siła kwalifikacyjna).
 #   Bez testu wstecznego (decyzja: nie odtwarzamy treningów sprzed 2023). Ocena na bieżąco: model.json -> live_comparison (RPS z / bez);
 #   po ok. 10 weekendach z sygnałami wagi zostają tylko, jeśli wersja z czynnikami jest wyraźnie lepsza.
+
+# Dostawcy silników (model v3, etap 6); RĘCZNIE, co sezon do sprawdzenia (test pokrycia 2026 w tests/test_engines.py).
+_MERCEDES_RENAULT_2022 = {
+    "mercedes": ["mercedes", "aston_martin", "williams", "mclaren"], "ferrari": ["ferrari", "haas", "alfa"],
+    "red_bull_powertrains": ["red_bull", "alphatauri"], "renault": ["alpine"],
+}
+_MERCEDES_RENAULT_2024 = {
+    "mercedes": ["mercedes", "aston_martin", "williams", "mclaren"], "ferrari": ["ferrari", "haas", "sauber"],
+    "red_bull_powertrains": ["red_bull", "rb"], "renault": ["alpine"],
+}
+ENGINE_SUPPLIER: dict[int, dict[str, list[str]]] = {
+    2022: _MERCEDES_RENAULT_2022, 2023: _MERCEDES_RENAULT_2022, 2024: _MERCEDES_RENAULT_2024, 2025: _MERCEDES_RENAULT_2024,
+    2026: {"mercedes": ["mercedes", "mclaren", "williams", "alpine"], "ferrari": ["ferrari", "haas", "cadillac"],
+           "honda": ["aston_martin"], "red_bull_ford": ["red_bull", "rb"], "audi": ["audi"]},
+}
+# Ten sam zespół pod nową nazwą: nowy identyfikator -> poprzedni (dziedziczy ocenę auta przy pierwszym sezonie pod nową nazwą).
+TEAM_LINEAGE: dict[str, str] = {
+    "racing_point": "force_india", "aston_martin": "racing_point", "alpine": "renault", "alphatauri": "toro_rosso",
+    "rb": "alphatauri", "alfa": "sauber", "sauber": "alfa", "audi": "sauber",
+}
