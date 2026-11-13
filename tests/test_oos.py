@@ -125,7 +125,7 @@ def test_walk_forward_levels_gives_race_levels_per_test_season():
 def test_level_report_compares_base_tuned_and_grid_only():
     informative = {**BASE, "signal": 1.0, "noise": 0.0}                       # bazowe wagi dobrego czynnika
     report = level_report(CASES, [2024, 2025], informative, BOUNDS, {"noise"}, n=300)
-    assert set(report["levels"]) == {"base", "tuned", "grid_only"}
+    assert set(report["levels"]) == {"base", "tuned", "grid_only", "shared"}
     assert all(len(v) == 16 for v in report["levels"].values())
     assert report["diffs"]["base_vs_grid_only"]["post"].mean < 0       # siła z czynników pomaga względem samej siatki
     assert isinstance(report["diffs"]["tuned_vs_base"]["pre"], Diff)
@@ -136,3 +136,23 @@ def test_write_oos_stores_the_new_level_means(tmp_path):
     write_oos(path, {2024: 0.025}, levels={2024: [lv(0.2, 0.1, 0.3), lv(0.4, 0.3, None)]})
     row = json.loads(path.read_text())[0]
     assert row["rps_pre"] == pytest.approx(0.3) and row["rps_post"] == pytest.approx(0.2) and row["rps_quali"] == pytest.approx(0.3)
+
+
+# --- szum kwalifikacji i porównanie osobne vs wspólne (model v3, etap 2) ---
+from oos import quali_noise_scan  # noqa: E402
+
+
+def test_quali_noise_scan_prefers_less_noise_when_the_strength_is_right():
+    qcase = case(1, "d1")
+    from dataclasses import replace
+    qcase = replace(qcase, factor_scores={"signal": {d: 5.0 - 3 * i for i, d in enumerate(DRIVERS)}},
+                    actual_quali={d: i + 1 for i, d in enumerate(DRIVERS)})
+    weights = {"q_signal": 1.0, "quali_noise": 0.8, "grid_base_weight": 0.9, "race_noise_base": 0.5}
+    scan = quali_noise_scan([qcase], weights, [0.1, 0.8, 1.5], n=600)
+    assert sorted(scan) == [0.1, 0.8, 1.5] and scan[0.1] < scan[1.5]
+
+
+def test_level_report_also_compares_separate_with_shared_strengths():
+    report = level_report(CASES, [2024], {**BASE, "q_signal": 1.0}, BOUNDS, {"noise"}, n=200)
+    assert "shared" in report["levels"] and len(report["levels"]["shared"]) == 8
+    assert isinstance(report["diffs"]["separate_vs_shared"]["post"], Diff)

@@ -19,7 +19,7 @@ import config
 from dataclasses import replace
 from typing import Literal
 
-from evaluation import RaceLevels, RoundCase, evaluate_levels, prepare_seasons, score_rounds
+from evaluation import RaceLevels, RoundCase, evaluate_levels, evaluate_quali, prepare_seasons, score_rounds
 from scoring import Diff, paired_bootstrap, verdict
 from history_store import HistoryStore
 from schemas import SeasonScore
@@ -109,6 +109,17 @@ def gate_verdict(with_levels: list[RaceLevels], without_levels: list[RaceLevels]
     return "inconclusive", diffs
 
 
+def quali_noise_scan(cases: list[RoundCase], weights: dict[str, float], noises: list[float],
+                     n: int = config.N_SIMULATIONS_TUNING) -> dict[float, float]:
+    """Średni RPS kwalifikacji dla kolejnych wartości szumu (do wyboru `QUALIFYING_NOISE` na sezonach treningowych)."""
+    scan = {}
+    for noise in noises:
+        values = [v for v in (evaluate_quali(c, {**weights, "quali_noise": noise}, n) for c in cases) if v is not None]
+        if values:
+            scan[noise] = float(mean(values))
+    return scan
+
+
 def level_report(
     cases_by_season: dict[int, list[RoundCase]], test_seasons: list[int], base: dict[str, float],
     bounds: dict[str, tuple[float, float]], locked: set[str], n: int = config.N_SIMULATIONS_TUNING,
@@ -121,9 +132,11 @@ def level_report(
         "base": evaluate_levels(cases, base, n),
         "tuned": _flat(tuned_by_season),
         "grid_only": evaluate_levels([replace(c, factor_scores={}) for c in cases], base, n),
+        "shared": evaluate_levels(cases, base, n, separate=False),     # dawny tryb: jedna siła do kwalifikacji i wyścigu
     }
     diffs = {"tuned_vs_base": _diffs(levels["tuned"], levels["base"]),
-             "base_vs_grid_only": _diffs(levels["base"], levels["grid_only"])}
+             "base_vs_grid_only": _diffs(levels["base"], levels["grid_only"]),
+             "separate_vs_shared": _diffs(levels["base"], levels["shared"])}
     return {"levels": levels, "diffs": diffs, "tuned_by_season": tuned_by_season}
 
 
@@ -181,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Ocena poza próbką i bramka czynnika")
     parser.add_argument("--out", type=Path, default=Path("public/data"))
     parser.add_argument("--factor", default=None)
+    parser.add_argument("--scan-quali-noise", action="store_true",
+                        help="RPS kwalifikacji dla kilku wartości szumu: na sezonach 2022-2023 (wybór) i testowych (kontrola)")
     parser.add_argument("--n", type=int, default=config.N_SIMULATIONS_TUNING)
     args = parser.parse_args(argv)
     now = datetime.now(timezone.utc)
@@ -192,6 +207,14 @@ def main(argv: list[str] | None = None) -> int:
     test_seasons = [s for s in config.TEST_SEASONS if s in by_season]
     base, bounds, locked = config.default_weights(), config.WEIGHT_BOUNDS, set(config.LOCKED_WEIGHTS)
     print(f"Sezony z wyścigami: {sorted(by_season)}; testowe: {test_seasons}")
+    if args.scan_quali_noise:
+        noises = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2]
+        for label, seasons in (("trening 2022-2023", [2022, 2023]), ("test 2024-2026", test_seasons)):
+            cases = [c for s_ in seasons for c in by_season.get(s_, [])]
+            print(f"\nRPS kwalifikacji ({label}, {len(cases)} wyścigów):")
+            for noise, value in quali_noise_scan(cases, base, noises, args.n).items():
+                print(f"  szum {noise:.1f}: {value:.5f}")
+        return 0
     if args.factor:
         result = factor_gate(by_season, args.factor, test_seasons, base, bounds, locked, args.n)
         print(f"\nCzynnik {args.factor}: Brier zwycięzcy poza próbką (mniej = lepiej)\nsezon      z       bez")
@@ -205,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
                            "inconclusive": "NIEJEDNOZNACZNE (zostaje stan dotychczasowy)"}[result.verdict])
         return 0
     report = level_report(by_season, test_seasons, base, bounds, locked, args.n)
-    print("\nŚredni RPS na wyścig (mniej = lepiej):\nzestaw wag   przed kwal.  po kwal.  kwalifikacje")
+    print("\nŚredni RPS na wyścig (mniej = lepiej):\nzestaw wag   przed kwal.  po kwal.  kwalifikacje   (shared = dawny wspólny tryb)")
     for name, rows in report["levels"].items():
         def avg(attr):
             values = [getattr(x, attr) for x in rows if getattr(x, attr) is not None]

@@ -174,17 +174,22 @@ class RaceLevels:
     brier_win_post: float     # dotychczasowa miara (zwycięzca) jako wskaźnik pomocniczy
 
 
+def evaluate_quali(case: RoundCase, weights: dict[str, float], n: int, separate: bool = True) -> float | None:
+    """RPS przewidzianej kolejności kwalifikacji; None bez faktycznych kwalifikacji."""
+    if not case.actual_quali:
+        return None
+    _, quali_strength = _strengths(case, weights, separate)
+    noise = weights.get("quali_noise", config.QUALIFYING_NOISE) if separate else config.QUALIFYING_NOISE
+    return ranking_rps(predict_qualifying(quali_strength, n=n, noise=noise).probabilities, case.actual_quali)
+
+
 def evaluate_levels(cases: list[RoundCase], weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,
                     separate: bool = True) -> list[RaceLevels]:
     out = []
     for case in cases:
         post = _predict_case(case, weights, n, separate=separate)
         pre = _predict_case(case, weights, n, grid_known=False, separate=separate)
-        quali = None
-        if case.actual_quali:
-            _, quali_strength = _strengths(case, weights, separate)
-            noise = weights.get("quali_noise", config.QUALIFYING_NOISE) if separate else config.QUALIFYING_NOISE
-            quali = ranking_rps(predict_qualifying(quali_strength, n=n, noise=noise).probabilities, case.actual_quali)
+        quali = evaluate_quali(case, weights, n, separate)
         out.append(RaceLevels(
             round=case.round, rps_pre=ranking_rps(pre, case.actual_finish), rps_post=ranking_rps(post, case.actual_finish),
             rps_quali=quali, brier_win_post=evaluate(case.round, post, case.actual_finish).brier_win,
