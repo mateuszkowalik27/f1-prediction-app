@@ -526,5 +526,5 @@ def test_noise_options_reach_both_simulations(tmp_path, monkeypatch):
     run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
     for side in ("quali", "race"):
         assert seen[side]["team_share"] == 0.4 and seen[side]["teams"]
-    assert seen["quali"]["chaos_prob"] == pytest.approx(0.1)                          # kwalifikacje: bez składnika safety cara
+    assert seen["quali"]["chaos_prob"] == 0.0                                        # kwalifikacje: chaos osobnym parametrem (domyślnie 0)
     assert seen["race"]["chaos_prob"] > 0.1                                          # wyścig: baza + składnik od ryzyka safety cara

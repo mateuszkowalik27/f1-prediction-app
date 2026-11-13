@@ -67,7 +67,7 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "race_noise_base": (0.3, 1.5),
 }
 LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit", "pit_stop", "quali_gap", "quali_noise", "rating_quali",
-                            "team_noise_share", "chaos_base", "chaos_sc", "chaos_rain", "chaos_mult"}   # wagi, których robot nie rusza
+                            "team_noise_share", "chaos_base", "chaos_sc", "chaos_rain", "chaos_mult", "chaos_quali"}   # wagi, których robot nie rusza
 TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
 USE_TUNED_WEIGHTS = False          # robot używa wag bazowych; strojenie (walk-forward, oos.py) zostaje jako narzędzie do porównań
 
@@ -108,7 +108,7 @@ def default_weights() -> dict[str, float]:
     quali = {f"q_{name}": QUALI_FACTOR_WEIGHTS.get(name, 0.0) for name in FACTOR_WEIGHTS}
     return {**FACTOR_WEIGHTS, **quali, "grid_base_weight": GRID_BASE_WEIGHT, "race_noise_base": RACE_NOISE_BASE,
             "quali_noise": QUALIFYING_NOISE, "team_noise_share": TEAM_NOISE_SHARE, "chaos_base": CHAOS_BASE,
-            "chaos_sc": CHAOS_SC, "chaos_rain": CHAOS_RAIN, "chaos_mult": CHAOS_MULT}
+            "chaos_sc": CHAOS_SC, "chaos_rain": CHAOS_RAIN, "chaos_mult": CHAOS_MULT, "chaos_quali": CHAOS_QUALI}
 PIT_OUTLIER_RATIO = 1.5   # postój dłuższy niż 1,5 x mediana wyścigu (czerwona flaga, kara) nie liczy się
 FUEL_EFFECT_S_PER_LAP = 0.035   # o tyle szybsze jest auto z każdym okrążeniem (spalone paliwo); korekta przy liczeniu zużycia opon
 MIN_STINT_LAPS = 8              # krótszych stintów nie używamy do zużycia opon
@@ -204,3 +204,4 @@ CHAOS_BASE = 0.0         # bazowe prawdopodobieństwo "chaosu" w wyścigu / kwal
 CHAOS_SC = 0.0           # dodatek do tego prawdopodobieństwa za ryzyko safety cara toru (tylko wyścig)
 CHAOS_RAIN = 0.0         # dodatek za szansę deszczu
 CHAOS_MULT = 2.0         # ile razy większa jest losowość w symulacji z chaosem
+CHAOS_QUALI = 0.0       # prawdopodobieństwo chaosu w kwalifikacjach (skan 2026-11-13: chaos w kwalifikacjach pogarszał RPS, więc 0)

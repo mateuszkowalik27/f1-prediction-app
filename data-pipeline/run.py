@@ -250,7 +250,7 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     noise = {"teams": teams, "team_share": weights.get("team_noise_share", config.TEAM_NOISE_SHARE),
              "chaos_mult": weights.get("chaos_mult", config.CHAOS_MULT)}
     quali = predict_qualifying(quali_combined.strength, noise=weights.get("quali_noise", config.QUALIFYING_NOISE),
-                               chaos_prob=chaos_prob_from(weights, sc=0.0, rain=rain), **noise)
+                               chaos_prob=weights.get("chaos_quali", 0.0), **noise)
     quali_rows = _actual_quali_rows(start_grid.quali, drivers) if start_grid else quali.probabilities
     dnf, sim_track = apply_early_season(dnf_rates(ctx), track, race.round)
     strategy = predict_strategy(track, weather, tyre, track_deg_ratio(ctx))

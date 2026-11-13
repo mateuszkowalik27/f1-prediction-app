@@ -147,7 +147,7 @@ def _noise_options(case: RoundCase, weights: dict[str, float], race: bool) -> di
     sc = case.sim_track.sc_probability if race else 0.0
     return {"teams": {e.driver_id: e.team_id for e in case.ctx.entries},
             "team_share": weights.get("team_noise_share", config.TEAM_NOISE_SHARE),
-            "chaos_prob": chaos_prob_from(weights, sc=sc, rain=rain),
+            "chaos_prob": chaos_prob_from(weights, sc=sc, rain=rain) if race else weights.get("chaos_quali", 0.0),
             "chaos_mult": weights.get("chaos_mult", config.CHAOS_MULT)}
 
 

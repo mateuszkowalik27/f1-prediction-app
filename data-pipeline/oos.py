@@ -130,6 +130,8 @@ VARIANTS: dict[str, dict[str, float]] = {
     "pace_race": {"pace_race": 0.10, "car_pace": 0.25, "driver_form": 0.10},             # czyste tempo kosztem części punktów
     "rating_quali": {"q_quali_gap": 0.0, "q_rating_quali": 0.40},                        # kwalifikacje: rozkład auto + kierowca
     "rating_quali_plus": {"q_quali_gap": 0.20, "q_rating_quali": 0.20},                  # połowa starego quali_gap, połowa nowego
+    "noise_model": {"chaos_base": 0.2, "chaos_mult": 3.0},                                # chaos tylko w wyścigu
+    "noise_model_lite": {"chaos_base": 0.1, "chaos_mult": 3.0},
     "v3_core": {"car_pace": 0.12, "driver_form": 0.06, "rating_race": 0.17, "pace_race": 0.10},   # oceny + tempo + połowa starych
 }
 

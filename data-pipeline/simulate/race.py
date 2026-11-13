@@ -46,7 +46,7 @@ def simulate_race(
     rng = np.random.default_rng(seed)
     if grid is None:
         grid_base = np.array([quali_strength.get(d, 0.0) for d in drivers]) if quali_strength else base
-        quali = grid_base + draw_noise(rng, n, drivers, qualifying_noise, teams, team_share, chaos_prob, chaos_mult)
+        quali = grid_base + draw_noise(rng, n, drivers, qualifying_noise, teams, team_share)   # bez chaosu: ten dotyczy tylko wyścigu
         grid_pos = (-quali).argsort(axis=1, kind="stable").argsort(axis=1, kind="stable") + 1.0
     else:
         grid_pos = np.array([grid.get(d) or count for d in drivers], dtype=float)  # brak/0 = start z końca

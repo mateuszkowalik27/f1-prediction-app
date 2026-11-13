@@ -151,3 +151,12 @@ def test_noise_options_keep_probabilities_normalised():
 def test_driver_missing_from_teams_still_works():
     res = sim(teams={"a": "t1"}, team_share=0.5)
     assert sum(p.win for p in res.values()) == pytest.approx(1.0)
+
+
+def test_chaos_does_not_blur_the_sampled_grid_only_the_race():
+    strength = {d: (3.0 if d == "a" else 0.0) for d in DRIVERS}
+    quali_strength = {d: (3.0 if d == "a" else 0.0) for d in DRIVERS}
+    a = simulate_race(strength, None, make_track(0.9), NO_DNF, 2, n=4000, seed=6, quali_strength=quali_strength,
+                      chaos_prob=1.0, chaos_mult=1.0)                                  # chaos x1: bez zmiany
+    b = simulate_race(strength, None, make_track(0.9), NO_DNF, 2, n=4000, seed=6, quali_strength=quali_strength)
+    assert [p.win for p in a] == [p.win for p in b]                                    # mnożnik 1 nie zmienia nic, także w siatce
