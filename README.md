@@ -164,6 +164,26 @@ Wynik (2026-11-13, 68 wyścigów testowych, średni RPS, osobne siły vs dawna w
 
 Czyli kwalifikacje i prognozy sprzed kwalifikacji są wyraźnie lepsze, a po kwalifikacjach nic się nie pogorszyło.
 
+### Etap 3: nowy rdzeń siły
+
+Dotychczasowa „siła" to średnia punktów (tylko top 10, wrażliwa na pecha). Dodano: **oceny w stylu Elo** (`ratings.py`: model
+Plackett-Luce, auto i kierowca osobno, uczone z całej kolejności mety, kierowcy bez mety pomijani w rankingu, rozgrzewka na ośmiu
+sezonach wstecz), czynnik **`rating_race`**, czynnik **`pace_race`** (czyste tempo okrążeń z OpenF1, od 2023) i **`rating_quali`**
+(rozkład straty w kwalifikacjach na auto i kierowcę). Bramka (RPS, wariant minus baza, przedział 90%, 68 wyścigów):
+
+| Wariant | przed kwal. | po kwal. | werdykt |
+|---|---|---|---|
+| oceny zamiast punktów (`rating_race`) | -0,0002 [-0,0006; +0,0001] | +0,0000 | bez różnicy |
+| czyste tempo (`pace_race`) | -0,0002 [-0,0002; -0,0001] | -0,0001 | wchodzi |
+| oceny + połowa punktów | -0,0002 [-0,0004; -0,00003] | -0,0001 | wchodzi |
+| **oceny + tempo + połowa punktów (`v3_core`)** | **-0,0003 [-0,0005; -0,0001]** | -0,0001 | **wchodzi (używa robot)** |
+| `rating_quali` zamiast `quali_gap` (kwalifikacje) | kwal. +0,0016 [+0,0008; +0,0024] | | **wypada** |
+
+Efekt `v3_core` jest mały (ok. 0,3% RPS przed kwalifikacjami), ale jednoznaczny kierunkowo i nie pogarsza prognoz po kwalifikacjach.
+Prosta średnia straty kierowcy (`quali_gap`) okazała się w kwalifikacjach lepsza niż rozkład na auto i kierowcę. Parametry ocen dobrano
+na sezonach 2022-2023 (krajobraz płaski: różnice ~0,0001 RPS). Wagi wyścigu: `rating_race` 0,17, `pace_race` 0,10, `car_pace` 0,12,
+`driver_form` 0,06. Punkt odniesienia po etapie 3 (średni RPS, wagi bazowe): przed kwal. 0,1203, po kwal. 0,1147, kwalifikacje 0,1066.
+
 ## Wyniki sesji w Kalendarzu
 
 Po rozwinięciu rundy zakończone sesje mają przycisk „Wyniki": treningi i kwalifikacje sprintu (najlepszy czas

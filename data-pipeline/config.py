@@ -194,3 +194,4 @@ RATING_QUALI_DRIVER_K = 6    # ściąganie poprawki kierowcy (względem kolegi) 
 #   rating_quali (zastępuje quali_gap w sile kwalifikacyjnej): przed +0,0010 [+0,0003; +0,0018] WORSE, kwal. +0,0016 [+0,0008; +0,0024] WORSE -> WYPADA.
 #   rating_quali_plus (pół na pół z quali_gap): przed +0,0003, kwal. +0,0003, oba nieoznaczone -> stan dotychczasowy (rating_quali waga 0, LOCKED).
 #   Wniosek: prosta średnia straty kierowcy (quali_gap) jest w kwalifikacjach lepsza niż rozkład na auto i kierowcę.
+# Punkt odniesienia po etapie 3 v3 (2026-11-13, wagi bazowe, średni RPS): przed kwal. 0,1203, po kwal. 0,1147, kwalifikacje 0,1066.
