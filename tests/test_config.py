@@ -15,6 +15,7 @@ def test_factor_weight_keys_complete():
     assert set(config.FACTOR_WEIGHTS) == {
         "car_pace", "driver_form", "track_history", "practice_pace",
         "weekend_shift", "car_track_fit", "wet_skill", "reliability", "quali_gap", "pit_stop", "race_vs_quali", "tyre_deg_fit", "temp_fit", "rating_race", "pace_race", "rating_quali",
+        "fp2_long_run", "fp3_quali_sim", "sprint_pace", "sq_quali",
     }
 
 

@@ -13,7 +13,9 @@ from factors.reliability import Reliability
 from factors.temp_fit import TempFit
 from factors.track_history import TrackHistory
 from factors.tyre_deg_fit import TyreDegFit
+from factors.weekend_signal_factors import Fp2LongRun, Fp3QualiSim, SprintPace, SqQuali
 from factors.wet_skill import WetSkill
 
 ALL_FACTORS = [CarPace(), DriverForm(), TrackHistory(), PracticePace(), WeekendShift(), CarTrackFit(), WetSkill(),
-               Reliability(), QualiGap(), PitStopSpeed(), RaceVsQuali(), TyreDegFit(), TempFit(), RatingRace(), PaceRace(), RatingQuali()]
+               Reliability(), QualiGap(), PitStopSpeed(), RaceVsQuali(), TyreDegFit(), TempFit(), RatingRace(), PaceRace(), RatingQuali(),
+               Fp2LongRun(), Fp3QualiSim(), SprintPace(), SqQuali()]

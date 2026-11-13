@@ -28,6 +28,7 @@ class RaceContext:
     profiles: dict[str, TrackProfile] = field(default_factory=dict)    # profile torów rozegranych rund sezonu
     aggregates: list[RaceAggregates] = field(default_factory=list)     # agregaty wyścigów wcześniejszych niż bieżący
     long_history: list[HistoricRace] = field(default_factory=list)     # wyniki z kilku sezonów wstecz (rozgrzewka ocen siły)
+    signals: WeekendSignals | None = None                              # tempo z sesji bieżącego weekendu (OpenF1)
 
 
 class Factor(Protocol):

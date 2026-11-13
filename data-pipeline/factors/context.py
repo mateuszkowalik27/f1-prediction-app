@@ -10,7 +10,7 @@ from schemas import HistoricRace, Race, RaceAggregates, Session
 
 def build_context(race, entries, history, circuit_history, wet, weather, practice, grid, track, profile,
                   profiles, as_of_round: int, aggregates: Sequence[RaceAggregates] = (),
-                  long_history: Sequence[HistoricRace] = ()) -> RaceContext:
+                  long_history: Sequence[HistoricRace] = (), signals=None) -> RaceContext:
     """Kontekst predykcji bez wyników z rundy `as_of_round` i późniejszych (ważne dla testu wstecznego)."""
     def before(h) -> bool:
         return (h.season, h.round) < (race.season, as_of_round)
@@ -21,6 +21,7 @@ def build_context(race, entries, history, circuit_history, wet, weather, practic
         circuit_history=[h for h in circuit_history if before(h) and h.results],
         wet=wet, weather=weather, practice=practice, grid=grid, profile=profile, profiles=profiles,
         aggregates=sorted((a for a in aggregates if before(a)), key=lambda a: (a.season, a.round)),
+        signals=signals,
         long_history=sorted((h for h in long_history if before(h) and h.results), key=lambda h: (h.season, h.round)),
     )
 

@@ -23,6 +23,10 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "temp_fit": 0.0,        # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "pace_race": 0.10,      # model v3, etap 3: czyste tempo okrążeń (od 2023; brak = czynnik pominięty)
     "rating_race": 0.17,    # model v3, etap 3: ocena Plackett-Luce auto + kierowca
+    "fp2_long_run": 0.10,   # model v3, etap 5: tempo z długich przejazdów FP2 (siła wyścigowa); stała waga, ocena na bieżąco
+    "sprint_pace": 0.10,    # model v3, etap 5: czyste tempo ze sprintu (weekendy sprinterskie; siła wyścigowa)
+    "fp3_quali_sim": 0.0,   # model v3, etap 5: tylko siła kwalifikacyjna (q_fp3_quali_sim)
+    "sq_quali": 0.0,        # model v3, etap 5: tylko siła kwalifikacyjna (q_sq_quali)
     "rating_quali": 0.0,    # model v3, etap 3: ocena kwalifikacyjna auto + kierowca; tylko siła kwalifikacyjna (q_rating_quali)
 }
 # Wagi siły KWALIFIKACYJNEJ (jedno okrążenie); zasila przewidywanie kwalifikacji i losowanie siatki przed kwalifikacjami.
@@ -35,6 +39,8 @@ QUALI_FACTOR_WEIGHTS: dict[str, float] = {
     "track_history": 0.05,
     "wet_skill": 0.05,
     "driver_form": 0.05,
+    "fp3_quali_sim": 0.12,  # etap 5: symulacja kwalifikacji z FP3 (weekendy bez sprintu)
+    "sq_quali": 0.15,       # etap 5: kwalifikacje sprintu jako sygnał do głównych kwalifikacji (weekendy sprinterskie)
 }
 # Dostrojone testem wstecznym na sezonie 2026 (rundy 1-20, siatka znana, 10 000 symulacji; próbka uczona = oceniana,
 # dlatego wybrano płaski fragment, a nie skrajny punkt). Błąd Briera zwycięzcy: 0,0361 -> 0,0246 (losowo: 0,0434);
@@ -62,12 +68,17 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "rating_race": (0.0, 0.5),
     "pace_race": (0.0, 0.3),
     "rating_quali": (0.0, 0.3),
+    "fp2_long_run": (0.0, 0.3),
+    "sprint_pace": (0.0, 0.3),
+    "fp3_quali_sim": (0.0, 0.3),
+    "sq_quali": (0.0, 0.3),
     "quali_noise": (0.3, 1.5),
     "grid_base_weight": (0.3, 1.6),
     "race_noise_base": (0.3, 1.5),
 }
 LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit", "pit_stop", "quali_gap", "quali_noise", "rating_quali",
-                            "team_noise_share", "chaos_base", "chaos_sc", "chaos_rain", "chaos_mult", "chaos_quali"}   # wagi, których robot nie rusza
+                            "team_noise_share", "chaos_base", "chaos_sc", "chaos_rain", "chaos_mult", "chaos_quali",
+                            "fp2_long_run", "sprint_pace", "fp3_quali_sim", "sq_quali"}   # wagi, których robot nie rusza
 TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
 USE_TUNED_WEIGHTS = False          # robot używa wag bazowych; strojenie (walk-forward, oos.py) zostaje jako narzędzie do porównań
 
