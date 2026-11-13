@@ -326,8 +326,9 @@ def test_aggregates_reach_the_context_without_future_rounds(tmp_path, monkeypatc
     for season, rnd in [(2026, 24), (2027, 1), (2027, 2), (2027, 3), (2027, 4)]:
         store.save(make_agg(season, rnd))
     seen = []
-    original = run_module.combine
-    monkeypatch.setattr(run_module, "combine", lambda ctx, factors, weights: seen.append(ctx.aggregates) or original(ctx, factors, weights))
+    original = run_module.combine_side
+    monkeypatch.setattr(run_module, "combine_side",
+                        lambda ctx, factors, weights, side: seen.append(ctx.aggregates) or original(ctx, factors, weights, side))
     run_pipeline(tmp_path, 2027, NOW, clients())                        # przewidujemy rundę 3
     assert [(a.season, a.round) for a in seen[0]] == [(2026, 24), (2027, 1), (2027, 2)]
 
@@ -461,3 +462,29 @@ def test_partial_official_grid_falls_back_to_qualifying_instead_of_inventing_pen
     monkeypatch.setattr(config, "GRID_MAX_MISSING", 1)
     g = start_grid({"d3": 1, "d1": 2})        # OpenF1 jeszcze niepełne albo część kierowców się nie zmapowała
     assert g.source == "qualifying" and g.grid == QUALI_GRID and g.penalties == []
+
+
+# --- osobne siły kwalifikacyjna i wyścigowa (model v3, etap 2) ---
+def test_qualifying_and_race_use_their_own_strengths(tmp_path, monkeypatch):
+    import run as run_module
+    seen = {}
+    real_quali, real_race = run_module.predict_qualifying, run_module.simulate_race
+
+    def spy_quali(strength, *a, **kw):
+        seen["quali"] = dict(strength)
+        seen["quali_noise"] = kw.get("noise")
+        return real_quali(strength, *a, **kw)
+
+    def spy_race(strength, grid, *a, **kw):
+        seen["race"] = dict(strength)
+        seen["race_quali"] = kw.get("quali_strength")
+        return real_race(strength, grid, *a, **kw)
+
+    monkeypatch.setattr(run_module, "predict_qualifying", spy_quali)
+    monkeypatch.setattr(run_module, "simulate_race", spy_race)
+    monkeypatch.setattr(config, "QUALI_FACTOR_WEIGHTS", {"car_pace": 1.0})        # kwalifikacje: tylko car_pace
+    monkeypatch.setattr(config, "QUALIFYING_NOISE", 0.55)
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
+    assert seen["quali"] and seen["race"] and seen["quali"] != seen["race"]
+    assert seen["race_quali"] == seen["quali"]                   # siatka losowana z siły kwalifikacyjnej (przed kwalifikacjami)
+    assert seen["quali_noise"] == 0.55                           # szum kwalifikacji z wag, nie stała na sztywno

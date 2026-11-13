@@ -18,7 +18,7 @@ from typing import Callable
 import config
 from backfill import ensure_aggregates
 from calibration import apply_tau, load_calibration
-from factors.base import combine
+from factors.base import combine_side
 from factors.context import build_context, race_from_history  # noqa: F401  (build_context eksportowany dla testów)
 from factors.registry import ALL_FACTORS
 from factors.reliability import dnf_rates
@@ -238,10 +238,11 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
 
     ctx = build_context(race, entries, history, circuit_history, wet, weather, practice, None, track,
                         profiles.get(race.circuit_id), profiles, as_of_round=race.round, aggregates=aggregates)
-    combined = combine(ctx, ALL_FACTORS, weights)
+    combined = combine_side(ctx, ALL_FACTORS, weights, "race")            # siła wyścigowa
+    quali_combined = combine_side(ctx, ALL_FACTORS, weights, "quali")     # siła kwalifikacyjna (jedno okrążenie)
     drivers = [e.driver_id for e in entries]
 
-    quali = predict_qualifying(combined.strength)
+    quali = predict_qualifying(quali_combined.strength, noise=weights.get("quali_noise", config.QUALIFYING_NOISE))
     quali_rows = _actual_quali_rows(start_grid.quali, drivers) if start_grid else quali.probabilities
     dnf, sim_track = apply_early_season(dnf_rates(ctx), track, race.round)
     strategy = predict_strategy(track, weather, tyre, track_deg_ratio(ctx))
@@ -249,6 +250,8 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
         combined.strength, actual_grid, sim_track, dnf, strategy.primary.stops,
         grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),
         noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
+        qualifying_noise=weights.get("quali_noise", config.QUALIFYING_NOISE),
+        quali_strength=quali_combined.strength,     # siatka przed kwalifikacjami losowana z siły kwalifikacyjnej
     )
     sources = {
         "open_meteo": "failed" if weather_failed else ("ok" if weather else "missing"),
