@@ -5,6 +5,8 @@ klasyfikacje oraz predykcje kwalifikacji, wyścigu i strategii opon jako szanse 
 
 ## Jak to działa (w skrócie)
 
+> Dłuższe, prostsze wyjaśnienie całej aplikacji (dane, robot, model, telefon): [docs/jak-dziala-apka.md](docs/jak-dziala-apka.md).
+
 Jak gazeta: redakcja pisze, kiosk wydaje.
 
 - **Robot (GitHub Actions)** co kilka godzin (w weekendy wyścigowe co 30 minut) pobiera dane z darmowych serwisów
