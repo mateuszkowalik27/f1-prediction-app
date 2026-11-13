@@ -247,3 +247,7 @@ TEAM_LINEAGE: dict[str, str] = {
     "racing_point": "force_india", "aston_martin": "racing_point", "alpine": "renault", "alphatauri": "toro_rosso",
     "rb": "alphatauri", "alfa": "sauber", "sauber": "alfa", "audi": "sauber",
 }
+RATING_TREND_GAIN = 0.0         # ile trendu (zmiany oceny auta w ostatnich wyścigach) dodać do oceny; 0 = bez trendu
+RATING_TREND_ALPHA = 0.3       # wygładzanie trendu: waga najnowszej zmiany oceny
+RATING_SUPPLIER_WEIGHT = 0.0   # punkt startowy zespołu bez ocen: ta część średniej ocen zespołów z tym samym silnikiem (0 = wyłączone)
+RATING_USE_LINEAGE = False     # czy zespół pod nową nazwą dziedziczy ocenę poprzednika (TEAM_LINEAGE)

@@ -213,3 +213,17 @@ def test_noise_scan_returns_every_metric_for_every_combination():
     assert len(out) == 2
     for row in out.values():
         assert {"rps_pre", "rps_post", "logloss_pre", "logloss_post", "tails"} <= set(row)
+
+
+# --- bramka parametrów ocen (model v3, etap 6) ---
+from oos import rating_param_gate  # noqa: E402
+
+
+def test_rating_param_gate_returns_a_verdict_with_intervals_for_two_parameter_sets():
+    from evaluation import prepare_rounds
+    from fakes import clients
+    cases = {2027: prepare_rounds(2027, clients())}
+    weights = {k: 0.0 for k in __import__("config").default_weights()} | {"rating_race": 1.0, "grid_base_weight": 0.9,
+                                                                         "race_noise_base": 0.5, "quali_noise": 0.7}
+    verdict_, diffs = rating_param_gate(cases, [2027], weights, {"trend_gain": 2.0, "trend_alpha": 0.5}, {}, n=200)
+    assert verdict_ in ("keep", "drop", "inconclusive") and {"pre", "post"} <= set(diffs)

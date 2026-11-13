@@ -35,3 +35,24 @@ def test_falls_back_to_the_short_history_when_there_is_no_long_one():
 def test_same_inputs_give_the_same_scores():
     ctx = make_ctx(entries=ENTRIES, long_history=season(2026))
     assert RatingRace().score(ctx) == RatingRace().score(ctx)
+
+
+# --- trend, dziedziczenie i dostawca silnika (model v3, etap 6) ---
+def improving_history():
+    rows_a = [("a1", "up", 1), ("a2", "up", 2), ("b1", "mid", 3), ("b2", "mid", 4), ("c1", "down", 5), ("c2", "down", 6)]
+    early = [hist_race(2026, i + 1, [("a1", "up", 3), ("a2", "up", 4), ("b1", "mid", 1), ("b2", "mid", 2), ("c1", "down", 5), ("c2", "down", 6)])
+             for i in range(4)]                                                 # "up" na początku sezonu słaby...
+    late = [hist_race(2026, 5 + i, rows_a) for i in range(4)]                   # ...a potem wygrywa: zespół przyspiesza
+    return early + late
+
+
+def test_trend_gain_rewards_the_team_that_is_getting_faster():
+    ctx = make_ctx(entries=ENTRIES, long_history=improving_history())
+    flat = RatingRace(trend_gain=0.0).score(ctx)
+    pushed = RatingRace(trend_gain=3.0, trend_alpha=0.5).score(ctx)
+    assert pushed["a1"] - flat["a1"] > pushed["b1"] - flat["b1"]               # "up" zyskuje względem "mid" dzięki trendowi
+
+
+def test_default_parameters_do_not_change_the_scores():
+    ctx = make_ctx(entries=ENTRIES, long_history=improving_history())
+    assert RatingRace().score(ctx) == RatingRace(trend_gain=0.0, supplier_weight=0.0, use_lineage=False).score(ctx)

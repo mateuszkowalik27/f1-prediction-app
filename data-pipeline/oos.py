@@ -149,7 +149,7 @@ def rating_scan(cases: list[RoundCase], weights: dict[str, float], grid: list[di
     """Średni RPS (przed / po kwalifikacjach) dla kombinacji hiperparametrów ocen; czynnik `rating_race` liczony od nowa."""
     out = {}
     for params in grid:
-        factor = RatingRace(params.get("eta_car"), params.get("eta_driver"), params.get("car_keep"), params.get("driver_keep"))
+        factor = RatingRace(**params)
         recomputed = [replace(c, factor_scores={**c.factor_scores, "rating_race": factor.score(c.ctx)}) for c in cases]
         levels = evaluate_levels(recomputed, weights, n)
         out[tuple(sorted(params.items()))] = {"pre": float(mean(x.rps_pre for x in levels)),
@@ -196,6 +196,20 @@ def noise_scan(cases: list[RoundCase], weights: dict[str, float], grid: list[dic
             "tails": tail_report(cases, w, n),
         }
     return out
+
+
+def rating_param_gate(cases_by_season: dict[int, list[RoundCase]], test_seasons: list[int], base: dict[str, float],
+                      new_params: dict, old_params: dict, n: int = config.N_SIMULATIONS_TUNING,
+                      ) -> tuple[Literal["keep", "drop", "inconclusive"], dict[str, Diff]]:
+    """Bramka dwóch zestawów parametrów ocen (`rating_race` liczony od nowa) przy tych samych wagach; stałe wagi, trzy poziomy."""
+    cases = [c for s in test_seasons for c in cases_by_season.get(s, [])]
+
+    def levels(params: dict):
+        factor = RatingRace(**params)
+        redone = [replace(c, factor_scores={**c.factor_scores, "rating_race": factor.score(c.ctx)}) for c in cases]
+        return evaluate_levels(redone, base, n)
+
+    return gate_verdict(levels(new_params), levels(old_params))
 
 
 def level_report(
@@ -275,6 +289,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--variant", default=None, choices=sorted(VARIANTS), help="bramka wariantu wag (VARIANTS)")
     parser.add_argument("--scan-noise", action="store_true",
                         help="dobór losowości (wspólny los zespołu, chaos): sezony 2022-2023 (wybór) i testowe (kontrola)")
+    parser.add_argument("--scan-trend", action="store_true",
+                        help="dobór zysku trendu ocen: sezony 2022-2023 (wybór) i testowe (kontrola)")
+    parser.add_argument("--gate-ratings", action="store_true",
+                        help="bramki etapu 6: dziedziczenie po poprzedniku, punkt startowy z dostawcy, trend")
+    parser.add_argument("--trend-gain", type=float, default=1.0, help="zysk trendu użyty w --gate-ratings")
     parser.add_argument("--scan-ratings", action="store_true",
                         help="dobór hiperparametrów ocen: sezony 2022-2023 (wybór) i testowe (kontrola)")
     parser.add_argument("--scan-quali-noise", action="store_true",
@@ -310,6 +329,25 @@ def main(argv: list[str] | None = None) -> int:
                 total = v["rps_pre"] + v["rps_post"] + (v["rps_quali"] or 0)
                 print(f"  {dict(params)}  {total:.4f} | {v['logloss_pre']:.3f}/{v['logloss_post']:.3f} | "
                       f"{t['longshot_actual']} / {t['longshot_expected']:.1f}, {t['fav_pred']:.2f} / {t['fav_actual']:.2f}")
+        return 0
+    if args.scan_trend:
+        grid = [{"trend_gain": g, "trend_alpha": a} for g in (0.0, 0.5, 1.0, 2.0, 4.0) for a in (0.2, 0.4) if not (g == 0.0 and a != 0.2)]
+        for label, seasons in (("trening 2022-2023", [2022, 2023]), ("test 2024-2026", test_seasons)):
+            cases = [c for s_ in seasons for c in by_season.get(s_, [])]
+            print(f"\nTrend ocen ({label}, {len(cases)} wyścigów): RPS przed / po kwal. (mniej = lepiej)")
+            for params, v in sorted(rating_scan(cases, base, grid, args.n).items(), key=lambda kv: kv[1]["pre"] + kv[1]["post"]):
+                print(f"  {dict(params)}  {v['pre']:.5f} / {v['post']:.5f}")
+        return 0
+    if args.gate_ratings:
+        steps = [("dziedziczenie po poprzedniku", {"use_lineage": True}),
+                 ("punkt startowy z dostawcy (0,5)", {"supplier_weight": 0.5}),
+                 (f"trend (zysk {args.trend_gain})", {"trend_gain": args.trend_gain})]
+        for name, params in steps:
+            result, diffs = rating_param_gate(by_season, test_seasons, base, params, {}, args.n)
+            print(f"\n{name}: RPS nowe - stare (ujemna = nowe lepsze), przedział 90%:")
+            for level, d in diffs.items():
+                print(f"  {level:6s} {d.mean:+.5f}  [{d.lo:+.5f}, {d.hi:+.5f}]  n={d.n}  -> {verdict(d)}")
+            print("  DECYZJA:", {"keep": "WCHODZI", "drop": "WYPADA", "inconclusive": "NIEJEDNOZNACZNE"}[result])
         return 0
     if args.scan_ratings:
         grid = [{"eta_car": ec, "eta_driver": ed, "car_keep": ck}
