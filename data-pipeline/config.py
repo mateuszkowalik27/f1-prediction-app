@@ -23,6 +23,7 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "temp_fit": 0.0,        # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "pace_race": 0.10,      # model v3, etap 3: czyste tempo okrążeń (od 2023; brak = czynnik pominięty)
     "rating_race": 0.17,    # model v3, etap 3: ocena Plackett-Luce auto + kierowca
+    "rating_quali": 0.0,    # model v3, etap 3: ocena kwalifikacyjna auto + kierowca; tylko siła kwalifikacyjna (q_rating_quali)
 }
 # Wagi siły KWALIFIKACYJNEJ (jedno okrążenie); zasila przewidywanie kwalifikacji i losowanie siatki przed kwalifikacjami.
 # Ustawione ręcznie, nie strojone automatycznie. `quali_gap` jest tu głównym składnikiem (po kwalifikacjach nie wchodzi do wyścigu).
@@ -60,11 +61,12 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "temp_fit": (0.0, 0.08),
     "rating_race": (0.0, 0.5),
     "pace_race": (0.0, 0.3),
+    "rating_quali": (0.0, 0.3),
     "quali_noise": (0.3, 1.5),
     "grid_base_weight": (0.3, 1.6),
     "race_noise_base": (0.3, 1.5),
 }
-LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit", "pit_stop", "quali_gap", "quali_noise"}   # wagi, których robot nie rusza
+LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit", "pit_stop", "quali_gap", "quali_noise", "rating_quali"}   # wagi, których robot nie rusza
 TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
 USE_TUNED_WEIGHTS = False          # robot używa wag bazowych; strojenie (walk-forward, oos.py) zostaje jako narzędzie do porównań
 
@@ -188,3 +190,4 @@ RATING_DRIVER_KEEP = 0.9    # ile poprawki kierowcy zostaje na początku nowego 
 #   pace_race (czyste tempo kosztem części punktów): przed -0,0002 [-0,0002; -0,0001] BETTER, po -0,0001 [-0,0002; +0,0001].
 #   v3_core (oceny 0,17 + tempo 0,10 + po połowie starych punktów): przed -0,0003 [-0,0005; -0,0001] BETTER, po -0,0001 -> WCHODZI.
 #   Efekt jest mały (ok. 0,3% RPS przed kwalifikacjami), ale jednoznaczny kierunkowo i bez pogorszenia po kwalifikacjach.
+RATING_QUALI_DRIVER_K = 6    # ściąganie poprawki kierowcy (względem kolegi) ku zeru: n/(n+K); porównanie z kolegą jest zaszumione

@@ -126,6 +126,8 @@ VARIANTS: dict[str, dict[str, float]] = {
     "rating_race": {"car_pace": 0.0, "driver_form": 0.0, "rating_race": 0.45},          # oceny zamiast punktów
     "rating_race_plus": {"car_pace": 0.15, "driver_form": 0.075, "rating_race": 0.225},  # oceny obok połowy starych czynników
     "pace_race": {"pace_race": 0.10, "car_pace": 0.25, "driver_form": 0.10},             # czyste tempo kosztem części punktów
+    "rating_quali": {"q_quali_gap": 0.0, "q_rating_quali": 0.40},                        # kwalifikacje: rozkład auto + kierowca
+    "rating_quali_plus": {"q_quali_gap": 0.20, "q_rating_quali": 0.20},                  # połowa starego quali_gap, połowa nowego
     "v3_core": {"car_pace": 0.12, "driver_form": 0.06, "rating_race": 0.17, "pace_race": 0.10},   # oceny + tempo + połowa starych
 }
 
