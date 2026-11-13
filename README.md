@@ -126,20 +126,26 @@ siatka) i samą *kolejność kwalifikacji*. Każde porównanie dwóch wersji mod
 zmiana jest „lepsza" tylko wtedy, gdy cały przedział leży po stronie poprawy, inaczej jest „niejednoznaczna" i zostaje stan
 dotychczasowy. Narzędzie: `python data-pipeline/oos.py` (raport) i `python data-pipeline/oos.py --factor NAZWA` (bramka czynnika).
 
-Punkt odniesienia (2026-11-13, wyścigi testowe 2024-2026, 68 wyścigów, średni RPS):
+Punkt odniesienia (2026-11-13, po usunięciu `pit_stop`, wyścigi testowe 2024-2026, 68 wyścigów, średni RPS):
 
 | Zestaw wag | przed kwal. | po kwal. | kwalifikacje |
 |---|---|---|---|
-| bazowe (używa robot) | 0,1224 | 0,1147 | 0,1120 |
-| dostrojone walk-forward | 0,1254 | 0,1120 | 0,1171 |
+| bazowe (używa robot) | 0,1224 | 0,1147 | 0,1122 |
+| dostrojone walk-forward | 0,1250 | 0,1115 | 0,1162 |
 | sama siatka (siła = 0) | 0,1645 | 0,1178 | 0,1740 |
 
 - Model jest **wyraźnie lepszy od samej siatki** na wszystkich trzech poziomach (po kwalifikacjach różnica -0,0031, przedział
   od -0,0045 do -0,0018; przed kwalifikacjami -0,042). Dawna miara (zwycięzca) tego nie wykazywała.
-- **Dostrojone wagi nie są lepsze**: poprawiają poziom, pod który je strojono (po kwalifikacjach, -0,0026), ale pogarszają
-  prognozy przed kwalifikacjami (+0,0030) i kwalifikacje (+0,0051). Dlatego robot używa teraz **wag bazowych**
+- **Dostrojone wagi nie są lepsze**: poprawiają poziom, pod który je strojono (po kwalifikacjach, -0,0032), ale pogarszają
+  prognozy przed kwalifikacjami (+0,0026) i kwalifikacje (+0,0040). Dlatego robot używa teraz **wag bazowych**
   (`USE_TUNED_WEIGHTS = False` w `config.py`). Zastrzeżenie: wagi bazowe były w v1 dobrane na sezonie 2026, więc dla niego
   porównanie jest korzystne dla bazowych.
+
+Bramka nową miarą (2026-11-13) dla czynników z v2:
+- `pit_stop` **wypada** (waga 0): po kwalifikacjach i w kwalifikacjach wyraźnie pogarsza wynik, przed kwalifikacjami bez wyraźnej różnicy.
+  Dawna miara (zwycięzca) go ratowała; pełna kolejność tego nie potwierdza.
+- `quali_gap` **zostaje bez zmian**, choć automat zwróciłby „wypada": pomaga przed kwalifikacjami i w kwalifikacjach, a po
+  kwalifikacjach lekko szkodzi (dubluje informację z siatki). Rozstrzyga to etap 2 (osobna siła kwalifikacyjna i wyścigowa).
 
 ## Wyniki sesji w Kalendarzu
 

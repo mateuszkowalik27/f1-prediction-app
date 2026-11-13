@@ -17,7 +17,7 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "wet_skill": 0.05,
     "reliability": 0.10,
     "quali_gap": 0.10,
-    "pit_stop": 0.03,
+    "pit_stop": 0.0,        # WYPADŁ z bramki v3 (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "race_vs_quali": 0.0,   # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "tyre_deg_fit": 0.0,    # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "temp_fit": 0.0,        # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
@@ -48,7 +48,7 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "grid_base_weight": (0.3, 1.6),
     "race_noise_base": (0.3, 1.5),
 }
-LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit"}   # wagi, których robot nie rusza
+LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit", "pit_stop"}   # wagi, których robot nie rusza
 TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
 USE_TUNED_WEIGHTS = False          # robot używa wag bazowych; strojenie (walk-forward, oos.py) zostaje jako narzędzie do porównań
 
@@ -143,8 +143,15 @@ DEG_HIGH_RATIO = 1.25        # tor uznajemy za "wysokie zużycie", gdy jego pozi
 
 # Punkt odniesienia v3 (2026-11-13, model v3 etap 1, średni RPS na wyścig, 68 wyścigów testowych 2024-2026, mniej = lepiej):
 #   zestaw         przed kwal.  po kwal.  kwalifikacje
-#   bazowe           0,1224      0,1147    0,1120     (używa robot)
-#   dostrojone       0,1254      0,1120    0,1171     (poprawa tylko tam, gdzie strojone; pogorszenie przed kwal. i w kwal.)
+#   bazowe           0,1224      0,1147    0,1122     (używa robot; liczby po usunięciu pit_stop)
+#   dostrojone       0,1250      0,1115    0,1162     (poprawa tylko tam, gdzie strojone; pogorszenie przed kwal. i w kwal.)
 #   sama siatka      0,1645      0,1178    0,1740
-#   Dostrojone vs bazowe: przed +0,0030 [+0,0023; +0,0038] WORSE, po -0,0026 [-0,0040; -0,0013] BETTER, kwal. +0,0051 WORSE
+#   Dostrojone vs bazowe: przed +0,0026 [+0,0019; +0,0034] WORSE, po -0,0032 [-0,0047; -0,0018] BETTER, kwal. +0,0040 WORSE
 #   => USE_TUNED_WEIGHTS = False (robot na wagach bazowych). Bazowe vs sama siatka: wyraźnie lepsze na wszystkich poziomach.
+# Bramka v3 (RPS, przedział 90%, z - bez; ujemna = czynnik pomaga), 2026-11-13:
+#   quali_gap: przed -0,0005 [-0,0009; -0,00004] BETTER, po +0,0010 [+0,0004; +0,0016] WORSE, kwal. -0,0009 BETTER.
+#     Pomaga tam, gdzie siatka jest nieznana (przed kwal., w kwal.), a po kwalifikacjach dubluje informację zawartą już w siatce.
+#     Automat zwróciłby "drop"; DECYZJA: bez zmian wagi, w etapie 2 trafia tylko do siły kwalifikacyjnej, nie wyścigowej.
+#   pit_stop:  przed +0,0004 [-0,0002; +0,0009] nieoznaczone, po +0,0006 [+0,0002; +0,0009] WORSE, kwal. +0,0009 WORSE
+#     -> WYPADA (waga 0, LOCKED_WEIGHTS). Dawna miara (zwycięzca) uznała go za pomocny; pełna kolejność tego nie potwierdza
+#     (podejrzenie z v2: zastępnik siły zespołu, nie szybkości załogi).

@@ -33,7 +33,8 @@ def main(argv: list[str] | None = None) -> int:
     base, bounds, locked = config.default_weights(), config.WEIGHT_BOUNDS, set(config.LOCKED_WEIGHTS)
     predictions: list[Prediction] = []
     for s in (x for x in config.TEST_SEASONS if x in by_season):
-        weights = weights_for_season(by_season, s, base, bounds, locked, args.n)   # wagi bez znajomości sezonu s
+        # te same wagi, których używa robot: bazowe, a przy włączonym strojeniu dostrojone bez znajomości sezonu s
+        weights = (weights_for_season(by_season, s, base, bounds, locked, args.n) if config.USE_TUNED_WEIGHTS else base)
         predictions += predict_rounds(by_season[s], weights, args.n)
     tau = fit_tau(predictions)
     print(f"Przewidywań poza próbką: {len(predictions)}; tau = {tau}")
