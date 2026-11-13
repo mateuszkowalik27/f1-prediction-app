@@ -66,8 +66,8 @@ def combine(ctx: RaceContext, factors: list[Factor], weights: dict[str, float]) 
         else:
             scored[factor.name] = scores
     used = list(scored)
-    total = sum(weights[n] for n in used)
-    norm = {n: (weights[n] / total if total > 0 else 1 / len(used)) for n in used}
+    total = sum(weights.get(n, 0.0) for n in used)
+    norm = {n: (weights.get(n, 0.0) / total if total > 0 else 1 / len(used)) for n in used}
     strength = {}
     for entry in ctx.entries:
         value = 0.0
