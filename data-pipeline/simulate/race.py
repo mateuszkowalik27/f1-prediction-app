@@ -5,6 +5,7 @@ import numpy as np
 
 import config
 from schemas import DriverProbability, TrackStats
+from simulate.noise import draw_noise
 
 
 def apply_early_season(
@@ -32,6 +33,10 @@ def simulate_race(
     noise_base: float = config.RACE_NOISE_BASE,
     qualifying_noise: float = config.QUALIFYING_NOISE,
     quali_strength: dict[str, float] | None = None,
+    teams: dict[str, str] | None = None,
+    team_share: float = 0.0,
+    chaos_prob: float = 0.0,
+    chaos_mult: float = 1.0,
 ) -> list[DriverProbability]:
     """grid=None oznacza, że kwalifikacje jeszcze się nie odbyły: siatka jest losowana w każdej symulacji, z siły
     kwalifikacyjnej (`quali_strength`), a gdy jej brak, z siły wyścigowej (zachowanie sprzed modelu v3)."""
@@ -41,7 +46,7 @@ def simulate_race(
     rng = np.random.default_rng(seed)
     if grid is None:
         grid_base = np.array([quali_strength.get(d, 0.0) for d in drivers]) if quali_strength else base
-        quali = grid_base + rng.normal(0.0, qualifying_noise, size=(n, count))
+        quali = grid_base + draw_noise(rng, n, drivers, qualifying_noise, teams, team_share, chaos_prob, chaos_mult)
         grid_pos = (-quali).argsort(axis=1, kind="stable").argsort(axis=1, kind="stable") + 1.0
     else:
         grid_pos = np.array([grid.get(d) or count for d in drivers], dtype=float)  # brak/0 = start z końca
@@ -51,7 +56,7 @@ def simulate_race(
     default_dnf = float(np.mean(list(dnf.values()))) if dnf else config.DEFAULT_DNF_RATE
     p_dnf = np.array([dnf.get(d, default_dnf) for d in drivers])
 
-    pace = base - penalty + rng.normal(0.0, sigma, size=(n, count))
+    pace = base - penalty + draw_noise(rng, n, drivers, sigma, teams, team_share, chaos_prob, chaos_mult)
     retired = rng.random((n, count)) < p_dnf
     pace = np.where(retired, -np.inf, pace)
     ranks = (-pace).argsort(axis=1, kind="stable").argsort(axis=1, kind="stable")  # 0 = zwycięzca

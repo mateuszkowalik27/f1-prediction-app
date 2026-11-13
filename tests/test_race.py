@@ -109,3 +109,45 @@ def test_quali_strength_is_ignored_when_the_grid_is_known():
     with_q = simulate_race(race_strength, GRID, make_track(0.5), NO_DNF, 2, n=800, seed=4, quali_strength=quali_strength)
     without = simulate_race(race_strength, GRID, make_track(0.5), NO_DNF, 2, n=800, seed=4)
     assert with_q == without
+
+
+# --- wspólny wstrząs zespołu i chaos (model v3, etap 4) ---
+TEAMS = {"a": "t1", "b": "t1", "c": "t2", "d": "t2", "e": "t3", "f": "t3"}
+
+
+def sim(**kw):
+    return {p.driver_id: p for p in simulate_race(
+        {d: 0.0 for d in DRIVERS}, GRID, make_track(0.3), NO_DNF, 2, n=kw.pop("n", 6000), seed=kw.pop("seed", 5), **kw)}
+
+
+def test_zero_noise_parameters_reproduce_the_old_result_exactly():
+    plain = simulate_race(EQUAL, GRID, make_track(0.5), NO_DNF, 2, n=800, seed=9)
+    zero = simulate_race(EQUAL, GRID, make_track(0.5), NO_DNF, 2, n=800, seed=9, teams=TEAMS, team_share=0.0,
+                         chaos_prob=0.0, chaos_mult=3.0)
+    assert plain == zero
+
+
+def test_shared_team_noise_changes_the_result_but_not_the_total_spread_of_one_driver():
+    solo = sim(teams=TEAMS, team_share=0.0)
+    shared = sim(teams=TEAMS, team_share=0.8)
+    assert [p.win for p in solo.values()] != [p.win for p in shared.values()]
+    assert sum(p.win for p in shared.values()) == pytest.approx(1.0)
+
+
+def test_chaos_helps_the_outsider_and_hurts_the_favourite():
+    strength = {d: (2.0 if d == "a" else 0.0) for d in DRIVERS}
+    calm = {p.driver_id: p for p in simulate_race(strength, GRID, make_track(0.3), NO_DNF, 2, n=8000, seed=3)}
+    wild = {p.driver_id: p for p in simulate_race(strength, GRID, make_track(0.3), NO_DNF, 2, n=8000, seed=3,
+                                                  chaos_prob=0.5, chaos_mult=4.0)}
+    assert wild["a"].win < calm["a"].win and wild["f"].win > calm["f"].win
+
+
+def test_noise_options_keep_probabilities_normalised():
+    res = sim(teams=TEAMS, team_share=0.5, chaos_prob=0.3, chaos_mult=3.0)
+    assert sum(p.win for p in res.values()) == pytest.approx(1.0)
+    assert all(sum(p.position_distribution) == pytest.approx(1.0) for p in res.values())
+
+
+def test_driver_missing_from_teams_still_works():
+    res = sim(teams={"a": "t1"}, team_share=0.5)
+    assert sum(p.win for p in res.values()) == pytest.approx(1.0)
