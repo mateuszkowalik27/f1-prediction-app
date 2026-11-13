@@ -14,7 +14,7 @@ def test_every_weight_has_bounds_and_base_inside_them():
 def test_factor_weight_keys_complete():
     assert set(config.FACTOR_WEIGHTS) == {
         "car_pace", "driver_form", "track_history", "practice_pace",
-        "weekend_shift", "car_track_fit", "wet_skill", "reliability", "quali_gap", "pit_stop", "race_vs_quali", "tyre_deg_fit", "temp_fit",
+        "weekend_shift", "car_track_fit", "wet_skill", "reliability", "quali_gap", "pit_stop", "race_vs_quali", "tyre_deg_fit", "temp_fit", "rating_race",
     }
 
 

@@ -21,6 +21,7 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "race_vs_quali": 0.0,   # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "tyre_deg_fit": 0.0,    # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "temp_fit": 0.0,        # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
+    "rating_race": 0.0,     # model v3, etap 3: ocena Plackett-Luce auto + kierowca; waga po bramce (komentarz na dole)
 }
 # Wagi siły KWALIFIKACYJNEJ (jedno okrążenie); zasila przewidywanie kwalifikacji i losowanie siatki przed kwalifikacjami.
 # Ustawione ręcznie, nie strojone automatycznie. `quali_gap` jest tu głównym składnikiem (po kwalifikacjach nie wchodzi do wyścigu).
@@ -56,6 +57,7 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "race_vs_quali": (0.0, 0.20),
     "tyre_deg_fit": (0.0, 0.15),
     "temp_fit": (0.0, 0.08),
+    "rating_race": (0.0, 0.5),
     "quali_noise": (0.3, 1.5),
     "grid_base_weight": (0.3, 1.6),
     "race_noise_base": (0.3, 1.5),
@@ -172,3 +174,9 @@ DEG_HIGH_RATIO = 1.25        # tor uznajemy za "wysokie zużycie", gdy jego pozi
 # Etap 2 v3 (2026-11-13), osobne siły kwalifikacyjna i wyścigowa vs dawna wspólna (RPS, z - bez, przedział 90%):
 #   przed kwal. -0,0020 [-0,0030; -0,0010] BETTER, po kwal. +0,0001 [-0,0000; +0,0002] bez różnicy, kwal. -0,0051 [-0,0066; -0,0036] BETTER.
 #   Średni RPS (osobne): przed 0,1206, po 0,1148, kwalifikacje 0,1066. Szum kwalifikacji 0,7 wybrany na 2022-2023.
+
+# Oceny siły (ratings.py, model v3 etap 3); wstępne wartości, dobierane na sezonach 2022-2023 (oos.py --scan-ratings)
+RATING_ETA_CAR = 0.15       # tempo uczenia oceny auta po wyścigu
+RATING_ETA_DRIVER = 0.08    # tempo uczenia poprawki kierowcy
+RATING_CAR_KEEP = 0.6       # ile oceny auta zostaje na początku nowego sezonu (auta się zmieniają)
+RATING_DRIVER_KEEP = 0.9    # ile poprawki kierowcy zostaje na początku nowego sezonu
