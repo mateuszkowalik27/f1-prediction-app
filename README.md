@@ -218,6 +218,15 @@ w `predictions/<sezon>-<runda>.json` dwie wersje zamrożonej prognozy, z czynnik
 kwalifikacji). Po wyścigu `model.json` pokazuje w `live_comparison` RPS obu wersji dla wyścigu i kwalifikacji (mniej = lepiej).
 **Decyzja po ok. 10 weekendach z sygnałami:** jeśli wersja z czynnikami nie jest wyraźnie lepsza, ustawiamy ich wagi na 0.
 
+### Etap 6: trend sezonu i silniki
+
+Oceny aut mają teraz **trend** (zespół z poprawkami przyspiesza, inny zwalnia), **dziedziczą ocenę po poprzedniej nazwie zespołu** (Audi po
+Sauberze, RB po AlphaTauri, Alpine po Renault) i zespół bez własnych wyników startuje od **średniej ocen zespołów z tym samym silnikiem**
+(np. Cadillac 2026). Tabela dostawców silników (`ENGINE_SUPPLIER` w `config.py`) jest **ręczna: sprawdzaj ją co sezon**; robot ostrzega na
+stderr, gdy sezon albo zespół nie ma w niej wpisu. Bramka (RPS nowe - stare, przedział 90%, 68 wyścigów): trend `-0,00003 [-0,00005; -0,00001]`
+przed kwalifikacjami (wchodzi, efekt bardzo mały), dziedziczenie i punkt startowy z dostawcy neutralne (włączone jako poprawność danych).
+Punkt odniesienia po etapie 6 (średni RPS): przed kwal. 0,1202, po kwal. 0,1124, kwalifikacje 0,1066; kalibracja `tau` = 0,90.
+
 ## Wyniki sesji w Kalendarzu
 
 Po rozwinięciu rundy zakończone sesje mają przycisk „Wyniki": treningi i kwalifikacje sprintu (najlepszy czas

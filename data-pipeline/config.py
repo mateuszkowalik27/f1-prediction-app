@@ -255,3 +255,4 @@ RATING_USE_LINEAGE = True      # czy zespół pod nową nazwą dziedziczy ocenę
 #   trend (zysk 1,0, alfa 0,3): przed -0,00003 [-0,00005; -0,00001] BETTER, po -0,00001 -> WCHODZI (efekt bardzo mały; skan na 2022-2023: płaski, im większy zysk, tym minimalnie lepiej).
 #   dziedziczenie po poprzedniku (np. Audi po Sauberze): przed -0,00001, po -0,00003, oba nieoznaczone -> WŁĄCZONE (poprawność danych, nic nie pogarsza).
 #   punkt startowy z dostawcy silnika (waga 0,5): przed +0,00001, po +0,00001, nieoznaczone -> WŁĄCZONE (dotyczy zespołów bez ocen, np. Cadillac 2026; w danych testowych prawie nie występują).
+# Punkt odniesienia po etapie 6 v3 (2026-11-14, wagi bazowe, średni RPS): przed kwal. 0,1202, po kwal. 0,1124, kwalifikacje 0,1066; kalibracja tau = 0,90.
