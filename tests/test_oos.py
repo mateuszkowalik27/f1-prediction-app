@@ -156,3 +156,34 @@ def test_level_report_also_compares_separate_with_shared_strengths():
     report = level_report(CASES, [2024], {**BASE, "q_signal": 1.0}, BOUNDS, {"noise"}, n=200)
     assert "shared" in report["levels"] and len(report["levels"]["shared"]) == 8
     assert isinstance(report["diffs"]["separate_vs_shared"]["post"], Diff)
+
+
+# --- warianty wag i dobór hiperparametrów ocen (model v3, etap 3) ---
+from oos import VARIANTS, rating_scan, variant_gate  # noqa: E402
+
+
+def test_variant_gate_keeps_a_clearly_better_weight_set_and_drops_a_worse_one():
+    base = {**BASE, "signal": 0.0, "noise": 0.5}
+    verdict_good, _ = variant_gate(CASES, [2024, 2025], base, {"signal": 1.0, "noise": 0.0}, n=300)
+    verdict_bad, _ = variant_gate(CASES, [2024, 2025], {**base, "signal": 1.0, "noise": 0.0}, {"signal": 0.0, "noise": 1.0}, n=300)
+    assert verdict_good == "keep" and verdict_bad == "drop"
+
+
+def test_named_variants_exist_and_only_touch_known_weights():
+    import config
+    assert {"rating_race", "rating_race_plus"} <= set(VARIANTS)
+    for overrides in VARIANTS.values():
+        assert set(overrides) <= set(config.default_weights())
+
+
+def test_rating_scan_returns_a_finite_score_for_every_combination():
+    from evaluation import prepare_rounds
+    from fakes import clients
+    import math
+
+    cases = prepare_rounds(2027, clients())
+    grid = [{"eta_car": 0.05, "eta_driver": 0.05, "car_keep": 0.6}, {"eta_car": 0.3, "eta_driver": 0.1, "car_keep": 0.9}]
+    weights = {k: 0.0 for k in __import__("config").default_weights()} | {"rating_race": 1.0, "grid_base_weight": 0.9,
+                                                                         "race_noise_base": 0.5, "quali_noise": 0.7}
+    out = rating_scan(cases, weights, grid, n=200)
+    assert len(out) == 2 and all(math.isfinite(v["pre"]) and math.isfinite(v["post"]) for v in out.values())

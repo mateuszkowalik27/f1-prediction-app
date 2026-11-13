@@ -20,6 +20,7 @@ from dataclasses import replace
 from typing import Literal
 
 from evaluation import RaceLevels, RoundCase, evaluate_levels, evaluate_quali, prepare_seasons, score_rounds
+from factors.rating_race import RatingRace
 from scoring import Diff, paired_bootstrap, verdict
 from history_store import HistoryStore
 from schemas import SeasonScore
@@ -120,6 +121,34 @@ def quali_noise_scan(cases: list[RoundCase], weights: dict[str, float], noises: 
     return scan
 
 
+# Warianty wag do bramki (`oos.py --variant NAZWA`): nadpisania względem wag bazowych (suma wag wyścigu zachowana).
+VARIANTS: dict[str, dict[str, float]] = {
+    "rating_race": {"car_pace": 0.0, "driver_form": 0.0, "rating_race": 0.45},          # oceny zamiast punktów
+    "rating_race_plus": {"car_pace": 0.15, "driver_form": 0.075, "rating_race": 0.225},  # oceny obok połowy starych czynników
+}
+
+
+def variant_gate(cases_by_season: dict[int, list[RoundCase]], test_seasons: list[int], base: dict[str, float],
+                 overrides: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,
+                 ) -> tuple[Literal["keep", "drop", "inconclusive"], dict[str, Diff]]:
+    """Bramka wariantu: wagi `base` z nadpisaniami vs same `base`, stałe wagi (bez strojenia), trzy poziomy oceny."""
+    cases = [c for s in test_seasons for c in cases_by_season.get(s, [])]
+    return gate_verdict(evaluate_levels(cases, {**base, **overrides}, n), evaluate_levels(cases, base, n))
+
+
+def rating_scan(cases: list[RoundCase], weights: dict[str, float], grid: list[dict[str, float]],
+                n: int = config.N_SIMULATIONS_TUNING) -> dict[tuple, dict[str, float]]:
+    """Średni RPS (przed / po kwalifikacjach) dla kombinacji hiperparametrów ocen; czynnik `rating_race` liczony od nowa."""
+    out = {}
+    for params in grid:
+        factor = RatingRace(params.get("eta_car"), params.get("eta_driver"), params.get("car_keep"), params.get("driver_keep"))
+        recomputed = [replace(c, factor_scores={**c.factor_scores, "rating_race": factor.score(c.ctx)}) for c in cases]
+        levels = evaluate_levels(recomputed, weights, n)
+        out[tuple(sorted(params.items()))] = {"pre": float(mean(x.rps_pre for x in levels)),
+                                              "post": float(mean(x.rps_post for x in levels))}
+    return out
+
+
 def level_report(
     cases_by_season: dict[int, list[RoundCase]], test_seasons: list[int], base: dict[str, float],
     bounds: dict[str, tuple[float, float]], locked: set[str], n: int = config.N_SIMULATIONS_TUNING,
@@ -194,6 +223,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Ocena poza próbką i bramka czynnika")
     parser.add_argument("--out", type=Path, default=Path("public/data"))
     parser.add_argument("--factor", default=None)
+    parser.add_argument("--variant", default=None, choices=sorted(VARIANTS), help="bramka wariantu wag (VARIANTS)")
+    parser.add_argument("--scan-ratings", action="store_true",
+                        help="dobór hiperparametrów ocen: sezony 2022-2023 (wybór) i testowe (kontrola)")
     parser.add_argument("--scan-quali-noise", action="store_true",
                         help="RPS kwalifikacji dla kilku wartości szumu: na sezonach 2022-2023 (wybór) i testowych (kontrola)")
     parser.add_argument("--n", type=int, default=config.N_SIMULATIONS_TUNING)
@@ -207,6 +239,24 @@ def main(argv: list[str] | None = None) -> int:
     test_seasons = [s for s in config.TEST_SEASONS if s in by_season]
     base, bounds, locked = config.default_weights(), config.WEIGHT_BOUNDS, set(config.LOCKED_WEIGHTS)
     print(f"Sezony z wyścigami: {sorted(by_season)}; testowe: {test_seasons}")
+    if args.variant:
+        result, diffs = variant_gate(by_season, test_seasons, base, VARIANTS[args.variant], args.n)
+        print(f"\nWariant {args.variant}: RPS wariant - baza (ujemna = wariant lepszy), przedział 90%:")
+        for name, d in diffs.items():
+            print(f"  {name:6s} {d.mean:+.5f}  [{d.lo:+.5f}, {d.hi:+.5f}]  n={d.n}  -> {verdict(d)}")
+        print("DECYZJA:", {"keep": "WCHODZI", "drop": "WYPADA", "inconclusive": "NIEJEDNOZNACZNE (zostaje stan dotychczasowy)"}[result])
+        return 0
+    if args.scan_ratings:
+        grid = [{"eta_car": ec, "eta_driver": ed, "car_keep": ck}
+                for ec in (0.05, 0.1, 0.2, 0.35) for ed in (0.03, 0.08, 0.15) for ck in (0.4, 0.6, 0.8)]
+        weights = {**base, **VARIANTS["rating_race"]}
+        for label, seasons in (("trening 2022-2023", [2022, 2023]), ("test 2024-2026", test_seasons)):
+            cases = [c for s_ in seasons for c in by_season.get(s_, [])]
+            print(f"\nRPS ocen ({label}, {len(cases)} wyścigów): przed kwal. / po kwal. (mniej = lepiej)")
+            scan = rating_scan(cases, weights, grid, args.n)
+            for params, v in sorted(scan.items(), key=lambda kv: kv[1]["pre"] + kv[1]["post"])[:8]:
+                print(f"  {dict(params)}  {v['pre']:.5f} / {v['post']:.5f}")
+        return 0
     if args.scan_quali_noise:
         noises = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2]
         for label, seasons in (("trening 2022-2023", [2022, 2023]), ("test 2024-2026", test_seasons)):
