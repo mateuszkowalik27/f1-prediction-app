@@ -106,3 +106,51 @@ def test_backtest_uses_the_races_own_air_temperature_as_a_stand_in_for_the_forec
     assert cases[2].ctx.weather.start_temperature_c == 21.0
     assert cases[2].ctx.weather.rain_probability == 0.0         # bez deszczu: nie włącza umiejętności deszczowej
     assert cases[1].ctx.weather is None                         # runda bez temperatury w agregacie
+
+
+# --- poziomy oceny (model v3, etap 1) ---
+from dataclasses import replace  # noqa: E402
+
+from evaluation import RaceLevels, _predict_case, evaluate_levels  # noqa: E402
+
+QUALI = {"d1": 1, "d2": 2, "d3": 3, "d4": 4}
+
+
+def only(factor):
+    return {**{k: 0.0 for k in weights()}, factor: 1.0, "grid_base_weight": config.GRID_BASE_WEIGHT,
+            "race_noise_base": config.RACE_NOISE_BASE}
+
+
+def test_prepare_rounds_stores_the_actual_qualifying_order():
+    cases = prepare_rounds(2027, clients(grid=QUALI))
+    assert all(c.actual_quali == QUALI for c in cases)
+    assert all(c.actual_quali is None for c in prepare_rounds(2027, clients()))      # brak danych kwalifikacji
+
+
+def test_unknown_grid_changes_the_race_prediction():
+    case = prepare_rounds(2027, clients())[0]
+    known = _predict_case(case, weights(), 400)
+    unknown = _predict_case(case, weights(), 400, grid_known=False)
+    assert [p.win for p in known] != [p.win for p in unknown]
+
+
+def test_levels_cover_pre_post_and_qualifying():
+    case = prepare_rounds(2027, clients(grid=QUALI))[0]
+    (levels,) = evaluate_levels([case], weights(), n=300)
+    assert isinstance(levels, RaceLevels) and levels.round == case.round
+    assert 0 <= levels.rps_pre <= 1 and 0 <= levels.rps_post <= 1 and 0 <= levels.rps_quali <= 1
+
+
+def test_levels_skip_qualifying_without_data():
+    case = prepare_rounds(2027, clients())[0]
+    (levels,) = evaluate_levels([case], weights(), n=300)
+    assert levels.rps_quali is None and levels.rps_pre is not None
+
+
+def test_a_strength_that_matches_the_real_qualifying_scores_better():
+    base = prepare_rounds(2027, clients(grid=QUALI))[0]
+    right = replace(base, factor_scores={"car_pace": {"d1": 3.0, "d2": 1.0, "d3": -1.0, "d4": -3.0}})
+    wrong = replace(base, factor_scores={"car_pace": {"d1": -3.0, "d2": -1.0, "d3": 1.0, "d4": 3.0}})
+    good = evaluate_levels([right], only("car_pace"), n=500)[0].rps_quali
+    bad = evaluate_levels([wrong], only("car_pace"), n=500)[0].rps_quali
+    assert good < bad

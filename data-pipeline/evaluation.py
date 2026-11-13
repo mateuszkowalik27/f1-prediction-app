@@ -25,6 +25,8 @@ from fetch.jolpica import JolpicaError
 from schemas import (
     DriverEntry, DriverProbability, Race, RaceAggregates, RaceEvaluation, TrackStats, WeatherForecast,
 )
+from scoring import ranking_rps
+from simulate.qualifying import predict_qualifying
 from simulate.race import apply_early_season, simulate_race
 from simulate.strategy import predict_strategy
 
@@ -63,6 +65,7 @@ class RoundCase:
     sim_track: TrackStats
     stops: int
     actual_finish: dict[str, int | None]
+    actual_quali: dict[str, int] | None = None   # faktyczna kolejność kwalifikacji (bez kar); None = brak danych
 
 
 class _Precomputed:
@@ -110,11 +113,16 @@ def prepare_rounds(season: int, clients: "Clients", calendar: list[Race] | None 
                             profiles.get(race.circuit_id), profiles, as_of_round=result.round,
                             aggregates=aggregates)
         dnf, sim_track = apply_early_season(dnf_rates(ctx), track, result.round)
+        try:
+            actual_quali = j.qualifying_grid(season, result.round)
+        except JolpicaError:
+            actual_quali = None      # brak kwalifikacji nie psuje oceny wyścigu: ten poziom jest wtedy pomijany
         cases.append(RoundCase(
             round=result.round, ctx=ctx,
             factor_scores={f.name: f.score(ctx) for f in ALL_FACTORS},
             dnf=dnf, sim_track=sim_track, stops=predict_strategy(track, None, None).primary.stops,
             actual_finish={r.driver_id: r.finish for r in result.results},
+            actual_quali=actual_quali or None,
         ))
     return cases
 
@@ -130,13 +138,42 @@ def prepare_seasons(seasons: list[int], clients: "Clients", aggregates: Sequence
     return by_season
 
 
-def _predict_case(case: RoundCase, weights: dict[str, float], n: int) -> list[DriverProbability]:
+def _predict_case(case: RoundCase, weights: dict[str, float], n: int, grid_known: bool = True,
+                  ) -> list[DriverProbability]:
+    """`grid_known=False`: prognoza sprzed kwalifikacji (siatka losowana w każdej symulacji)."""
     combined = combine(case.ctx, [_Precomputed(k, v) for k, v in case.factor_scores.items()], weights)
     return simulate_race(
-        combined.strength, case.ctx.grid, case.sim_track, case.dnf, case.stops, n=n,
+        combined.strength, case.ctx.grid if grid_known else None, case.sim_track, case.dnf, case.stops, n=n,
         grid_weight=weights.get("grid_base_weight", config.GRID_BASE_WEIGHT),
         noise_base=weights.get("race_noise_base", config.RACE_NOISE_BASE),
     )
+
+
+@dataclass(frozen=True)
+class RaceLevels:
+    """Ocena jednego wyścigu na trzech poziomach (RPS, mniej = lepiej)."""
+    round: int
+    rps_pre: float            # prognoza sprzed kwalifikacji (siatka nieznana)
+    rps_post: float           # prognoza po kwalifikacjach (znana siatka)
+    rps_quali: float | None   # przewidziana kolejność kwalifikacji; None bez danych
+    brier_win_post: float     # dotychczasowa miara (zwycięzca) jako wskaźnik pomocniczy
+
+
+def evaluate_levels(cases: list[RoundCase], weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,
+                    ) -> list[RaceLevels]:
+    out = []
+    for case in cases:
+        post = _predict_case(case, weights, n)
+        pre = _predict_case(case, weights, n, grid_known=False)
+        quali = None
+        if case.actual_quali:
+            combined = combine(case.ctx, [_Precomputed(k, v) for k, v in case.factor_scores.items()], weights)
+            quali = ranking_rps(predict_qualifying(combined.strength, n=n).probabilities, case.actual_quali)
+        out.append(RaceLevels(
+            round=case.round, rps_pre=ranking_rps(pre, case.actual_finish), rps_post=ranking_rps(post, case.actual_finish),
+            rps_quali=quali, brier_win_post=evaluate(case.round, post, case.actual_finish).brier_win,
+        ))
+    return out
 
 
 def score_rounds(cases: list[RoundCase], weights: dict[str, float], n: int = config.N_SIMULATIONS_TUNING,
