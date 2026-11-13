@@ -46,3 +46,36 @@ def ranking_rps(prediction: list[DriverProbability], actual: dict[str, int | Non
     classified = sum(1 for f in actual.values() if f is not None)
     return float(np.mean([rps(by_id[d].position_distribution, actual_distribution(actual[d], n, classified))
                           for d in shared]))
+
+
+@dataclass(frozen=True)
+class Diff:
+    """Różnica `a - b` miary na wyścig: średnia i przedział (ujemna = a lepsze, bo mniejsza miara jest lepsza)."""
+    mean: float
+    lo: float
+    hi: float
+    n: int
+
+
+def paired_bootstrap(a: Sequence[float], b: Sequence[float], n_boot: int = 4000, seed: int = 0,
+                     level: float = 0.9) -> Diff:
+    """Bootstrap po wyścigach (pary a[i], b[i]); przedział percentylowy na poziomie `level`."""
+    if len(a) != len(b):
+        raise ValueError("listy muszą mieć tę samą długość")
+    if not a:
+        raise ValueError("brak wyścigów do porównania")
+    diffs = np.asarray(a, dtype=float) - np.asarray(b, dtype=float)
+    rng = np.random.default_rng(seed)
+    means = diffs[rng.integers(0, len(diffs), size=(n_boot, len(diffs)))].mean(axis=1)
+    tail = (1 - level) / 2 * 100
+    lo, hi = np.percentile(means, [tail, 100 - tail])
+    return Diff(mean=float(diffs.mean()), lo=float(lo), hi=float(hi), n=len(diffs))
+
+
+def verdict(diff: Diff) -> Literal["better", "worse", "inconclusive"]:
+    """`better` gdy cały przedział leży poniżej zera, `worse` gdy powyżej, inaczej `inconclusive` (szum)."""
+    if diff.hi < 0:
+        return "better"
+    if diff.lo > 0:
+        return "worse"
+    return "inconclusive"

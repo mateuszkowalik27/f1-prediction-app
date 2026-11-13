@@ -39,3 +39,40 @@ def test_ranking_rps_treats_none_as_a_late_finish():
     good = ranking_rps(prediction, {"a": 1, "b": 2, "c": None})       # c nieklasyfikowany: i tak ostatni
     bad = ranking_rps(prediction, {"a": None, "b": 2, "c": 1})        # prognoza odwrotna do wyniku
     assert good == 0 and bad > 0.3
+
+
+# --- bootstrap i werdykt ---
+from scoring import Diff, paired_bootstrap, verdict   # noqa: E402
+
+
+def test_identical_scores_are_inconclusive():
+    d = paired_bootstrap([0.1, 0.2, 0.3, 0.4], [0.1, 0.2, 0.3, 0.4])
+    assert d.mean == 0 and d.lo == 0 and d.hi == 0 and verdict(d) == "inconclusive"
+
+
+def test_consistently_lower_scores_are_better():
+    a = [0.10, 0.12, 0.09, 0.11, 0.13, 0.10]
+    b = [x + 0.1 for x in a]
+    d = paired_bootstrap(a, b)
+    assert d.mean == pytest.approx(-0.1) and d.hi < 0 and verdict(d) == "better"
+
+
+def test_consistently_higher_scores_are_worse():
+    a = [0.2, 0.3, 0.25, 0.28]
+    d = paired_bootstrap(a, [x - 0.05 for x in a])
+    assert d.lo > 0 and verdict(d) == "worse"
+
+
+def test_noisy_small_difference_is_inconclusive():
+    a = [0.10, 0.30, 0.12, 0.28, 0.11, 0.29]
+    b = [0.30, 0.10, 0.28, 0.12, 0.29, 0.11]       # różnice +-0,2 na przemian: średnio 0
+    assert verdict(paired_bootstrap(a, b)) == "inconclusive"
+
+
+def test_bootstrap_is_reproducible_for_a_seed_and_validates_input():
+    a, b = [0.1, 0.4, 0.2, 0.3], [0.2, 0.3, 0.1, 0.5]
+    assert paired_bootstrap(a, b, seed=3) == paired_bootstrap(a, b, seed=3)
+    with pytest.raises(ValueError):
+        paired_bootstrap([0.1], [0.1, 0.2])
+    with pytest.raises(ValueError):
+        paired_bootstrap([], [])
