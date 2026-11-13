@@ -7,6 +7,7 @@ import numpy as np
 
 import config
 from schemas import DriverProbability
+from simulate.noise import draw_noise
 
 
 @dataclass(frozen=True)
@@ -20,12 +21,16 @@ def predict_qualifying(
     n: int = config.N_SIMULATIONS,
     seed: int = config.RANDOM_SEED,
     noise: float = config.QUALIFYING_NOISE,
+    teams: dict[str, str] | None = None,
+    team_share: float = 0.0,
+    chaos_prob: float = 0.0,
+    chaos_mult: float = 1.0,
 ) -> QualifyingPrediction:
     drivers = sorted(strength)
     count = len(drivers)
     base = np.array([strength[d] for d in drivers])
     rng = np.random.default_rng(seed)
-    performance = base + rng.normal(0.0, noise, size=(n, count))
+    performance = base + draw_noise(rng, n, drivers, noise, teams, team_share, chaos_prob, chaos_mult)
     ranks = (-performance).argsort(axis=1).argsort(axis=1)   # 0 = pole position
 
     probabilities = []
