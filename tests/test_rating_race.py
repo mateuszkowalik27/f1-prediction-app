@@ -53,6 +53,17 @@ def test_trend_gain_rewards_the_team_that_is_getting_faster():
     assert pushed["a1"] - flat["a1"] > pushed["b1"] - flat["b1"]               # "up" zyskuje względem "mid" dzięki trendowi
 
 
-def test_default_parameters_do_not_change_the_scores():
+def test_switched_off_parameters_equal_explicit_zeros(monkeypatch):
+    import config
+    for name, value in (("RATING_TREND_GAIN", 0.0), ("RATING_SUPPLIER_WEIGHT", 0.0), ("RATING_USE_LINEAGE", False)):
+        monkeypatch.setattr(config, name, value)
     ctx = make_ctx(entries=ENTRIES, long_history=improving_history())
     assert RatingRace().score(ctx) == RatingRace(trend_gain=0.0, supplier_weight=0.0, use_lineage=False).score(ctx)
+
+
+def test_the_adopted_defaults_come_from_the_config():
+    import config
+    ctx = make_ctx(entries=ENTRIES, long_history=improving_history())
+    assert RatingRace().score(ctx) == RatingRace(trend_gain=config.RATING_TREND_GAIN, trend_alpha=config.RATING_TREND_ALPHA,
+                                                 supplier_weight=config.RATING_SUPPLIER_WEIGHT,
+                                                 use_lineage=config.RATING_USE_LINEAGE).score(ctx)
