@@ -212,6 +212,9 @@ class Calibration(BaseModel):
 class SeasonScore(BaseModel):
     season: int
     brier: float
+    rps_pre: float | None = None     # średni RPS prognoz sprzed kwalifikacji (model v3)
+    rps_post: float | None = None    # po kwalifikacjach
+    rps_quali: float | None = None   # kwalifikacje
 
 
 class WeightSnapshot(BaseModel):

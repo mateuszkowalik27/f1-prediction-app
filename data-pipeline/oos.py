@@ -16,7 +16,11 @@ from pathlib import Path
 from statistics import mean
 
 import config
-from evaluation import RoundCase, prepare_seasons, score_rounds
+from dataclasses import replace
+from typing import Literal
+
+from evaluation import RaceLevels, RoundCase, evaluate_levels, prepare_seasons, score_rounds
+from scoring import Diff, paired_bootstrap, verdict
 from history_store import HistoryStore
 from schemas import SeasonScore
 from tuning import tune_weights
@@ -62,11 +66,74 @@ def keep_rule(with_scores: dict[int, float], without_scores: dict[int, float]) -
     return better_on_average and worse_seasons <= 1
 
 
+def walk_forward_levels(
+    cases_by_season: dict[int, list[RoundCase]], test_seasons: list[int], base: dict[str, float],
+    bounds: dict[str, tuple[float, float]], locked: set[str], n: int = config.N_SIMULATIONS_TUNING,
+) -> dict[int, list[RaceLevels]]:
+    """Jak `walk_forward`, ale wynik to ocena każdego wyścigu na trzech poziomach (RPS), a nie sam Brier."""
+    out: dict[int, list[RaceLevels]] = {}
+    for season in test_seasons:
+        test = cases_by_season.get(season)
+        if not test:
+            continue
+        tuned = weights_for_season(cases_by_season, season, base, bounds, locked, n)
+        out[season] = evaluate_levels(test, tuned, n)
+    return out
+
+
+def _flat(levels: dict[int, list[RaceLevels]]) -> list[RaceLevels]:
+    return [x for s in sorted(levels) for x in levels[s]]
+
+
+def _diffs(a: list[RaceLevels], b: list[RaceLevels]) -> dict[str, Diff]:
+    """Różnica `a - b` (ujemna = a lepsze) na każdym poziomie, tylko dla wyścigów, w których oba mają wynik."""
+    out = {}
+    for name, attr in (("pre", "rps_pre"), ("post", "rps_post"), ("quali", "rps_quali")):
+        pairs = [(getattr(x, attr), getattr(y, attr)) for x, y in zip(a, b)
+                 if getattr(x, attr) is not None and getattr(y, attr) is not None]
+        if pairs:
+            out[name] = paired_bootstrap([p for p, _ in pairs], [q for _, q in pairs])
+    return out
+
+
+def gate_verdict(with_levels: list[RaceLevels], without_levels: list[RaceLevels],
+                 ) -> tuple[Literal["keep", "drop", "inconclusive"], dict[str, Diff]]:
+    """Bramka z przedziałami: `keep`, gdy przed lub po kwalifikacjach jest wyraźna poprawa i nigdzie wyraźnego pogorszenia;
+    `drop` przy wyraźnym pogorszeniu na którymś z tych dwóch poziomów; inaczej `inconclusive` (zostaje stan dotychczasowy)."""
+    diffs = _diffs(with_levels, without_levels)
+    verdicts = [verdict(diffs[k]) for k in ("pre", "post") if k in diffs]
+    if "worse" in verdicts:
+        return "drop", diffs
+    if "better" in verdicts:
+        return "keep", diffs
+    return "inconclusive", diffs
+
+
+def level_report(
+    cases_by_season: dict[int, list[RoundCase]], test_seasons: list[int], base: dict[str, float],
+    bounds: dict[str, tuple[float, float]], locked: set[str], n: int = config.N_SIMULATIONS_TUNING,
+) -> dict:
+    """Trzy zestawy wag obok siebie na wyścigach testowych: bazowe, dostrojone (walk-forward) i sama siatka (siła = 0)."""
+    tests = [(s, c) for s in test_seasons for c in cases_by_season.get(s, [])]
+    cases = [c for _, c in tests]
+    tuned_by_season = walk_forward_levels(cases_by_season, test_seasons, base, bounds, locked, n)
+    levels = {
+        "base": evaluate_levels(cases, base, n),
+        "tuned": _flat(tuned_by_season),
+        "grid_only": evaluate_levels([replace(c, factor_scores={}) for c in cases], base, n),
+    }
+    diffs = {"tuned_vs_base": _diffs(levels["tuned"], levels["base"]),
+             "base_vs_grid_only": _diffs(levels["base"], levels["grid_only"])}
+    return {"levels": levels, "diffs": diffs, "tuned_by_season": tuned_by_season}
+
+
 @dataclass(frozen=True)
 class GateResult:
     with_scores: dict[int, float]
     without_scores: dict[int, float]
     keep: bool
+    verdict: str = "inconclusive"
+    diffs: dict | None = None
 
 
 def factor_gate(
@@ -76,11 +143,19 @@ def factor_gate(
     """Porównuje wynik poza próbką z czynnikiem i bez niego (jego waga 0 i zablokowana)."""
     with_scores = walk_forward(cases_by_season, test_seasons, base, bounds, locked, n)
     without_scores = walk_forward(cases_by_season, test_seasons, {**base, factor: 0.0}, bounds, set(locked) | {factor}, n)
-    return GateResult(with_scores, without_scores, keep_rule(with_scores, without_scores))
+    with_levels = walk_forward_levels(cases_by_season, test_seasons, base, bounds, locked, n)
+    without_levels = walk_forward_levels(cases_by_season, test_seasons, {**base, factor: 0.0}, bounds, set(locked) | {factor}, n)
+    result, diffs = gate_verdict(_flat(with_levels), _flat(without_levels))
+    return GateResult(with_scores, without_scores, result == "keep", result, diffs)
 
 
-def write_oos(path: Path, scores: dict[int, float]) -> None:
-    rows = [SeasonScore(season=s, brier=b).model_dump() for s, b in sorted(scores.items())]
+def write_oos(path: Path, scores: dict[int, float], levels: dict[int, list[RaceLevels]] | None = None) -> None:
+    def avg(season: int, attr: str) -> float | None:
+        values = [getattr(x, attr) for x in (levels or {}).get(season, []) if getattr(x, attr) is not None]
+        return float(mean(values)) if values else None
+
+    rows = [SeasonScore(season=s, brier=b, rps_pre=avg(s, "rps_pre"), rps_post=avg(s, "rps_post"),
+                        rps_quali=avg(s, "rps_quali")).model_dump() for s, b in sorted(scores.items())]
     path.write_text(json.dumps(rows, indent=2), encoding="utf-8")
 
 
@@ -119,16 +194,31 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Sezony z wyścigami: {sorted(by_season)}; testowe: {test_seasons}")
     if args.factor:
         result = factor_gate(by_season, args.factor, test_seasons, base, bounds, locked, args.n)
-        print(f"\nCzynnik {args.factor}: Brier poza próbką (mniej = lepiej)\nsezon      z       bez")
+        print(f"\nCzynnik {args.factor}: Brier zwycięzcy poza próbką (mniej = lepiej)\nsezon      z       bez")
         for s in test_seasons:
             print(f"{s}   {result.with_scores[s]:.5f}  {result.without_scores[s]:.5f}")
         print(f"średnio {mean(result.with_scores.values()):.5f}  {mean(result.without_scores.values()):.5f}")
-        print("DECYZJA:", "ZOSTAJE" if result.keep else "WYPADA (waga 0 i LOCKED_WEIGHTS)")
+        print("\nRPS całej kolejności, różnica z - bez (ujemna = czynnik pomaga), przedział 90%:")
+        for name, d in (result.diffs or {}).items():
+            print(f"  {name:6s} {d.mean:+.5f}  [{d.lo:+.5f}, {d.hi:+.5f}]  n={d.n}  -> {verdict(d)}")
+        print("DECYZJA:", {"keep": "ZOSTAJE", "drop": "WYPADA (waga 0 i LOCKED_WEIGHTS)",
+                           "inconclusive": "NIEJEDNOZNACZNE (zostaje stan dotychczasowy)"}[result.verdict])
         return 0
+    report = level_report(by_season, test_seasons, base, bounds, locked, args.n)
+    print("\nŚredni RPS na wyścig (mniej = lepiej):\nzestaw wag   przed kwal.  po kwal.  kwalifikacje")
+    for name, rows in report["levels"].items():
+        def avg(attr):
+            values = [getattr(x, attr) for x in rows if getattr(x, attr) is not None]
+            return f"{mean(values):.4f}" if values else "  -   "
+        print(f"{name:11s}  {avg('rps_pre'):>10s}  {avg('rps_post'):>8s}  {avg('rps_quali'):>11s}")
+    for pair, diffs in report["diffs"].items():
+        print(f"\n{pair} (ujemna = pierwsze lepsze), przedział 90%:")
+        for level, d in diffs.items():
+            print(f"  {level:6s} {d.mean:+.5f}  [{d.lo:+.5f}, {d.hi:+.5f}]  n={d.n}  -> {verdict(d)}")
     scores = walk_forward(by_season, test_seasons, base, bounds, locked, args.n)
     for s, b in scores.items():
-        print(f"{s}: Brier {b:.5f}")
-    write_oos(args.out / "oos.json", scores)
+        print(f"{s}: Brier zwycięzcy {b:.5f}")
+    write_oos(args.out / "oos.json", scores, levels=report["tuned_by_season"])
     print("Zapisano", args.out / "oos.json")
     return 0
 

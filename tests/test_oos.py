@@ -14,7 +14,7 @@ BOUNDS = {"signal": (0.0, 1.0), "noise": (0.0, 1.0)}
 
 
 def case(round_no, winner):
-    """Wyścig, w którym czynnik `signal` wskazuje zwycięzcę, a `noise` zawsze faworyzuje d1 (bez związku z wynikiem)."""
+    """Wyścig, w którym czynnik `signal` wskazuje zwycięzcę, a `noise` zawsze faworyzuje d4 (myli: d4 kończy zwykle ostatni; faworyzowanie d1 byłoby przy ocenie całej kolejności nieszkodliwe, bo d1 zwykle jest w czołówce)."""
     entries = make_entries(*[(d, "t") for d in DRIVERS])
     ctx = make_ctx(entries=entries, grid={d: i + 1 for i, d in enumerate(DRIVERS)})
     finish = {d: (1 if d == winner else 2 + i) for i, d in enumerate(d for d in DRIVERS if d != winner)}
@@ -22,7 +22,7 @@ def case(round_no, winner):
     return RoundCase(
         round=round_no, ctx=ctx,
         factor_scores={"signal": {d: (5.0 if d == winner else 0.0) for d in DRIVERS},
-                       "noise": {d: (5.0 if d == "d1" else 0.0) for d in DRIVERS}},
+                       "noise": {d: (5.0 if d == "d4" else 0.0) for d in DRIVERS}},
         dnf={d: 0.0 for d in DRIVERS}, sim_track=make_track(0.0), stops=2, actual_finish=finish,
     )
 
@@ -79,3 +79,60 @@ def test_write_oos_roundtrip(tmp_path):
     write_oos(path, {2024: 0.0251, 2025: 0.0243})
     rows = [SeasonScore(**r) for r in json.loads(path.read_text())]
     assert [(r.season, r.brier) for r in rows] == [(2024, 0.0251), (2025, 0.0243)]
+
+
+# --- poziomy oceny, przedziały i nowa bramka (model v3, etap 1) ---
+from evaluation import RaceLevels  # noqa: E402
+from oos import gate_verdict, level_report, walk_forward_levels  # noqa: E402
+from scoring import Diff  # noqa: E402
+
+
+def lv(pre, post, quali=None):
+    return RaceLevels(round=1, rps_pre=pre, rps_post=post, rps_quali=quali, brier_win_post=0.0)
+
+
+def test_gate_verdict_keeps_a_clear_improvement_on_both_levels():
+    base = [lv(0.20 + 0.01 * i, 0.18 + 0.01 * i) for i in range(10)]
+    better = [lv(x.rps_pre - 0.03, x.rps_post - 0.03) for x in base]
+    verdict, diffs = gate_verdict(better, base)
+    assert verdict == "keep" and diffs["pre"].hi < 0 and diffs["post"].hi < 0
+
+
+def test_gate_verdict_drops_a_clear_worsening():
+    base = [lv(0.20 + 0.01 * i, 0.18 + 0.01 * i) for i in range(10)]
+    worse = [lv(x.rps_pre + 0.03, x.rps_post + 0.03) for x in base]
+    assert gate_verdict(worse, base)[0] == "drop"
+
+
+def test_gate_verdict_is_inconclusive_when_the_difference_is_noise():
+    base = [lv(0.2, 0.2) for _ in range(8)]
+    noisy = [lv(0.2 + (0.05 if i % 2 else -0.05), 0.2 + (0.05 if i % 2 else -0.05)) for i in range(8)]
+    assert gate_verdict(noisy, base)[0] == "inconclusive"
+
+
+def test_gate_verdict_drops_when_one_level_gets_clearly_worse_even_if_the_other_improves():
+    base = [lv(0.20 + 0.01 * i, 0.20 + 0.01 * i) for i in range(10)]
+    mixed = [lv(x.rps_pre - 0.03, x.rps_post + 0.03) for x in base]
+    assert gate_verdict(mixed, base)[0] == "drop"
+
+
+def test_walk_forward_levels_gives_race_levels_per_test_season():
+    out = walk_forward_levels(CASES, [2024, 2025], BASE, BOUNDS, set(), n=300)
+    assert sorted(out) == [2024, 2025] and all(len(v) == 8 for v in out.values())
+    assert all(isinstance(x, RaceLevels) and x.rps_quali is None for v in out.values() for x in v)
+
+
+def test_level_report_compares_base_tuned_and_grid_only():
+    informative = {**BASE, "signal": 1.0, "noise": 0.0}                       # bazowe wagi dobrego czynnika
+    report = level_report(CASES, [2024, 2025], informative, BOUNDS, {"noise"}, n=300)
+    assert set(report["levels"]) == {"base", "tuned", "grid_only"}
+    assert all(len(v) == 16 for v in report["levels"].values())
+    assert report["diffs"]["base_vs_grid_only"]["post"].mean < 0       # siła z czynników pomaga względem samej siatki
+    assert isinstance(report["diffs"]["tuned_vs_base"]["pre"], Diff)
+
+
+def test_write_oos_stores_the_new_level_means(tmp_path):
+    path = tmp_path / "oos.json"
+    write_oos(path, {2024: 0.025}, levels={2024: [lv(0.2, 0.1, 0.3), lv(0.4, 0.3, None)]})
+    row = json.loads(path.read_text())[0]
+    assert row["rps_pre"] == pytest.approx(0.3) and row["rps_post"] == pytest.approx(0.2) and row["rps_quali"] == pytest.approx(0.3)
