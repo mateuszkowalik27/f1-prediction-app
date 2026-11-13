@@ -71,3 +71,51 @@ def test_build_ratings_is_independent_of_the_input_order():
     forward = build_ratings(races, 0.2, 0.2, 0.7, 0.9)
     backward = build_ratings(races[::-1], 0.2, 0.2, 0.7, 0.9)
     assert forward.car == pytest.approx(backward.car)
+
+
+# --- trend, dziedziczenie po poprzedniku i punkt startowy z dostawcy (model v3, etap 6) ---
+def season_of(year, order, n=6):
+    return [hist_race(year, i + 1, [(d, t, k + 1) for k, (d, t) in enumerate(order)]) for i in range(n)]
+
+
+DUO = [("a", "up"), ("b", "down")]
+
+
+def test_winning_team_gets_a_positive_trend_and_the_losing_one_a_negative_trend():
+    r = build_ratings(season_of(2026, DUO), 0.2, 0.1, 1.0, 1.0, trend_alpha=0.5)
+    assert r.trend["up"] > 0 > r.trend["down"]
+
+
+def test_strength_adds_the_trend_only_when_a_gain_is_requested():
+    r = Ratings(car={"x": 0.0}, driver={}, trend={"x": 0.2})
+    assert r.strength("d", "x") == 0.0 and r.strength("d", "x", trend_gain=1.0) == pytest.approx(0.2)
+
+
+def test_defaults_reproduce_the_ratings_without_the_new_features():
+    history = season_of(2025, DUO) + season_of(2026, DUO)
+    plain = build_ratings(history, 0.2, 0.1, 0.8, 0.9)
+    same = build_ratings(history, 0.2, 0.1, 0.8, 0.9, trend_alpha=0.0, lineage=None, supplier_of=None, supplier_weight=0.0)
+    assert plain.car == same.car and plain.driver == same.driver
+
+
+def test_a_renamed_team_inherits_the_rating_of_its_predecessor():
+    history = season_of(2025, [("a", "sauber"), ("b", "other")]) + season_of(2026, [("x", "top"), ("d", "audi"), ("b", "other")], n=1)
+    inherited = build_ratings(history, 0.2, 0.1, 0.8, 0.9, lineage={"audi": "sauber"})
+    cold = build_ratings(history, 0.2, 0.1, 0.8, 0.9)
+    assert inherited.car["audi"] > cold.car["audi"]
+
+
+def test_a_new_team_starts_from_the_average_of_its_engine_partners():
+    supplier = lambda season, team: "X" if team in ("t1", "t2", "newcomer") else "Y"
+    history = season_of(2026, [("a", "t1"), ("b", "t2"), ("c", "t3")], n=4) + [
+        hist_race(2026, 5, [("a", "t1", 1), ("n", "newcomer", 2), ("b", "t2", 3), ("c", "t3", 4)])]
+    with_prior = build_ratings(history, 0.2, 0.1, 1.0, 1.0, supplier_of=supplier, supplier_weight=1.0)
+    without = build_ratings(history, 0.2, 0.1, 1.0, 1.0)
+    assert with_prior.car["newcomer"] > without.car["newcomer"]
+
+
+def test_unknown_supplier_or_predecessor_changes_nothing():
+    history = season_of(2026, [("a", "t1"), ("n", "alone"), ("c", "t3")])
+    plain = build_ratings(history, 0.2, 0.1, 1.0, 1.0)
+    odd = build_ratings(history, 0.2, 0.1, 1.0, 1.0, lineage={"alone": "ghost"}, supplier_of=lambda s, t: None, supplier_weight=1.0)
+    assert plain.car == odd.car
