@@ -89,3 +89,23 @@ def test_unknown_grid_same_seed_same_result():
     strength = {"a": 1.0, "b": 0.0, "c": -1.0}
     one = simulate_race(strength, None, make_track(0.5), {}, 2, n=500, seed=3)
     assert one == simulate_race(strength, None, make_track(0.5), {}, 2, n=500, seed=3)
+
+
+# --- siatka losowana z siły kwalifikacyjnej (model v3, etap 2) ---
+def test_unknown_grid_is_sampled_from_the_qualifying_strength_when_given():
+    race_strength = {d: (1.0 if d == "a" else 0.0) for d in DRIVERS}       # w wyścigu najszybszy: a
+    quali_strength = {d: (3.0 if d == "f" else 0.0) for d in DRIVERS}      # w kwalifikacjach najszybszy: f
+    track = make_track(0.9)                                                # tor, na którym start ma duże znaczenie
+    shared = {p.driver_id: p for p in simulate_race(race_strength, None, track, NO_DNF, 2, n=6000, seed=2)}
+    split = {p.driver_id: p for p in simulate_race(race_strength, None, track, NO_DNF, 2, n=6000, seed=2,
+                                                   quali_strength=quali_strength)}
+    assert split["f"].win > shared["f"].win + 0.03            # f startuje z przodu częściej, więc wygrywa częściej
+    assert split["a"].win < shared["a"].win                   # kosztem a, który w kwalifikacjach nie błyszczy
+
+
+def test_quali_strength_is_ignored_when_the_grid_is_known():
+    race_strength = {d: (1.0 if d == "a" else 0.0) for d in DRIVERS}
+    quali_strength = {d: (3.0 if d == "f" else 0.0) for d in DRIVERS}
+    with_q = simulate_race(race_strength, GRID, make_track(0.5), NO_DNF, 2, n=800, seed=4, quali_strength=quali_strength)
+    without = simulate_race(race_strength, GRID, make_track(0.5), NO_DNF, 2, n=800, seed=4)
+    assert with_q == without

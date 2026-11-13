@@ -31,14 +31,17 @@ def simulate_race(
     grid_weight: float = config.GRID_BASE_WEIGHT,
     noise_base: float = config.RACE_NOISE_BASE,
     qualifying_noise: float = config.QUALIFYING_NOISE,
+    quali_strength: dict[str, float] | None = None,
 ) -> list[DriverProbability]:
-    """grid=None oznacza, że kwalifikacje jeszcze się nie odbyły: siatka jest losowana w każdej symulacji."""
+    """grid=None oznacza, że kwalifikacje jeszcze się nie odbyły: siatka jest losowana w każdej symulacji, z siły
+    kwalifikacyjnej (`quali_strength`), a gdy jej brak, z siły wyścigowej (zachowanie sprzed modelu v3)."""
     drivers = sorted(strength)
     count = len(drivers)
     base = np.array([strength[d] for d in drivers])
     rng = np.random.default_rng(seed)
     if grid is None:
-        quali = base + rng.normal(0.0, qualifying_noise, size=(n, count))
+        grid_base = np.array([quali_strength.get(d, 0.0) for d in drivers]) if quali_strength else base
+        quali = grid_base + rng.normal(0.0, qualifying_noise, size=(n, count))
         grid_pos = (-quali).argsort(axis=1, kind="stable").argsort(axis=1, kind="stable") + 1.0
     else:
         grid_pos = np.array([grid.get(d) or count for d in drivers], dtype=float)  # brak/0 = start z końca
