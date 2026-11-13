@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from factors.base import combine, zscore
+from factors.base import combine, combine_side, zscore
 from helpers import make_ctx, make_entries
 
 
@@ -80,3 +80,19 @@ def test_zero_weight_factor_is_not_computed_or_counted_as_used():
     on, off = F("on", {"d1": 1.0}), F("off", {"d1": -1.0})
     res = combine(make_ctx(entries=make_entries(("d1", "t1"))), [on, off], {"on": 1.0, "off": 0.0})
     assert res.used == ["on"] and not off.called and res.skipped == []
+
+
+def test_combine_side_quali_uses_only_the_q_weights():
+    ctx = make_ctx()
+    factors = [Fixed("a", {"d1": 1.0, "d2": -1.0}), Fixed("b", {"d1": -1.0, "d2": 1.0})]
+    weights = {"a": 1.0, "b": 0.0, "q_a": 0.0, "q_b": 1.0}
+    race = combine_side(ctx, factors, weights, "race")
+    quali = combine_side(ctx, factors, weights, "quali")
+    assert race.used == ["a"] and race.strength["d1"] == pytest.approx(1.0)
+    assert quali.used == ["b"] and quali.strength["d1"] == pytest.approx(-1.0)
+
+
+def test_combine_side_missing_q_weight_means_the_factor_is_skipped():
+    ctx = make_ctx()
+    result = combine_side(ctx, [Fixed("a", {"d1": 1.0})], {"a": 1.0}, "quali")
+    assert result.used == [] and all(v == 0.0 for v in result.strength.values())      # siła zerowa, nie błąd

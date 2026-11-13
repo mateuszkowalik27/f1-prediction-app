@@ -16,11 +16,22 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "car_track_fit": 0.05,
     "wet_skill": 0.05,
     "reliability": 0.10,
-    "quali_gap": 0.10,
+    "quali_gap": 0.0,       # od etapu 2 modelu v3 służy tylko sile kwalifikacyjnej (QUALI_FACTOR_WEIGHTS); w wyścigu dublował siatkę
     "pit_stop": 0.0,        # WYPADŁ z bramki v3 (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "race_vs_quali": 0.0,   # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "tyre_deg_fit": 0.0,    # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
     "temp_fit": 0.0,        # WYPADŁ z bramki (patrz komentarz na dole); kod zostaje, waga 0 i LOCKED_WEIGHTS
+}
+# Wagi siły KWALIFIKACYJNEJ (jedno okrążenie); zasila przewidywanie kwalifikacji i losowanie siatki przed kwalifikacjami.
+# Ustawione ręcznie, nie strojone automatycznie. `quali_gap` jest tu głównym składnikiem (po kwalifikacjach nie wchodzi do wyścigu).
+QUALI_FACTOR_WEIGHTS: dict[str, float] = {
+    "car_pace": 0.25,
+    "quali_gap": 0.40,
+    "car_track_fit": 0.10,
+    "practice_pace": 0.10,
+    "track_history": 0.05,
+    "wet_skill": 0.05,
+    "driver_form": 0.05,
 }
 # Dostrojone testem wstecznym na sezonie 2026 (rundy 1-20, siatka znana, 10 000 symulacji; próbka uczona = oceniana,
 # dlatego wybrano płaski fragment, a nie skrajny punkt). Błąd Briera zwycięzcy: 0,0361 -> 0,0246 (losowo: 0,0434);
@@ -40,15 +51,16 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
     "car_track_fit": (0.01, 0.15),
     "wet_skill": (0.01, 0.15),
     "reliability": (0.02, 0.25),
-    "quali_gap": (0.02, 0.30),
+    "quali_gap": (0.0, 0.30),
     "pit_stop": (0.0, 0.10),
     "race_vs_quali": (0.0, 0.20),
     "tyre_deg_fit": (0.0, 0.15),
     "temp_fit": (0.0, 0.08),
+    "quali_noise": (0.3, 1.5),
     "grid_base_weight": (0.3, 1.6),
     "race_noise_base": (0.3, 1.5),
 }
-LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit", "pit_stop"}   # wagi, których robot nie rusza
+LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit", "pit_stop", "quali_gap", "quali_noise"}   # wagi, których robot nie rusza
 TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
 USE_TUNED_WEIGHTS = False          # robot używa wag bazowych; strojenie (walk-forward, oos.py) zostaje jako narzędzie do porównań
 
@@ -86,7 +98,9 @@ DEFAULT_DNF_RATE = 0.08     # gdy nie ma jeszcze żadnych wyników
 
 def default_weights() -> dict[str, float]:
     """Wagi czynników oraz siła startu i poziom losowości: punkt wyjścia dla auto-wag."""
-    return {**FACTOR_WEIGHTS, "grid_base_weight": GRID_BASE_WEIGHT, "race_noise_base": RACE_NOISE_BASE}
+    quali = {f"q_{name}": QUALI_FACTOR_WEIGHTS.get(name, 0.0) for name in FACTOR_WEIGHTS}
+    return {**FACTOR_WEIGHTS, **quali, "grid_base_weight": GRID_BASE_WEIGHT, "race_noise_base": RACE_NOISE_BASE,
+            "quali_noise": QUALIFYING_NOISE}
 PIT_OUTLIER_RATIO = 1.5   # postój dłuższy niż 1,5 x mediana wyścigu (czerwona flaga, kara) nie liczy się
 FUEL_EFFECT_S_PER_LAP = 0.035   # o tyle szybsze jest auto z każdym okrążeniem (spalone paliwo); korekta przy liczeniu zużycia opon
 MIN_STINT_LAPS = 8              # krótszych stintów nie używamy do zużycia opon

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Literal, Protocol
 
 from schemas import (
     DriverEntry, HistoricRace, PracticeData, Race, RaceAggregates, TrackProfile, TrackStats, WeatherForecast,
@@ -77,6 +77,18 @@ def combine(ctx: RaceContext, factors: list[Factor], weights: dict[str, float]) 
         strength[entry.driver_id] = value
     return CombinedStrength(strength=strength, used=used, skipped=skipped,
                             low_data=len(used) < LOW_DATA_FACTOR_COUNT)
+
+
+def combine_side(ctx: RaceContext, factors: list[Factor], weights: dict[str, float],
+                 side: Literal["race", "quali"]) -> CombinedStrength:
+    """Siła wyścigowa (zwykłe wagi) albo kwalifikacyjna (wagi `q_<czynnik>`; brak klucza = czynnik pominięty).
+    Gdy żaden czynnik nie ma dodatniej wagi kwalifikacyjnej, siła jest zerowa (jak sama siatka), a nie równa po wszystkich."""
+    if side == "race":
+        return combine(ctx, factors, weights)
+    mapped = {f.name: weights.get(f"q_{f.name}", 0.0) for f in factors}
+    if not any(w > 0 for w in mapped.values()):
+        return CombinedStrength(strength={e.driver_id: 0.0 for e in ctx.entries}, used=[], skipped=[], low_data=True)
+    return combine(ctx, factors, mapped)
 
 
 def race_points(finish: int | None) -> int:
