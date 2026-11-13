@@ -96,3 +96,16 @@ def test_combine_side_missing_q_weight_means_the_factor_is_skipped():
     ctx = make_ctx()
     result = combine_side(ctx, [Fixed("a", {"d1": 1.0})], {"a": 1.0}, "quali")
     assert result.used == [] and all(v == 0.0 for v in result.strength.values())      # siła zerowa, nie błąd
+
+
+def test_long_history_is_filtered_to_earlier_races_and_defaults_to_empty():
+    from factors.context import build_context
+    from helpers import hist_race, make_race
+
+    rows = [("d1", "t1", 1), ("d2", "t1", 2)]
+    long = [hist_race(2020, 3, rows), hist_race(2027, 4, rows), hist_race(2027, 5, rows), hist_race(2027, 6, rows)]
+    race = make_race(round=5)
+    ctx = build_context(race, make_entries(("d1", "t1")), [], [], {}, None, None, None, make_ctx().track, None, {},
+                        as_of_round=5, long_history=long)
+    assert [(h.season, h.round) for h in ctx.long_history] == [(2020, 3), (2027, 4)]       # bez rundy 5 i późniejszych
+    assert make_ctx().long_history == []

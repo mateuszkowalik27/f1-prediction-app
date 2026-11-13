@@ -198,3 +198,12 @@ def test_unknown_grid_prediction_uses_the_qualifying_strength():
     split = _predict_case(case, w, 600, grid_known=False)
     shared = _predict_case(case, w, 600, grid_known=False, separate=False)
     assert [p.win for p in split] != [p.win for p in shared]
+
+
+def test_backtest_context_carries_a_long_history_with_older_seasons_but_no_future():
+    cases = prepare_rounds(2027, clients())
+    for case in cases:
+        seasons = {h.season for h in case.ctx.long_history}
+        assert 2026 in seasons or case.ctx.long_history == [] or 2027 in seasons
+        assert all((h.season, h.round) < (2027, case.round) for h in case.ctx.long_history)
+    assert any(h.season == 2026 for h in cases[0].ctx.long_history)               # starsze niż `history` (tam tylko poprzedni sezon)

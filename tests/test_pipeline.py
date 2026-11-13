@@ -488,3 +488,18 @@ def test_qualifying_and_race_use_their_own_strengths(tmp_path, monkeypatch):
     assert seen["quali"] and seen["race"] and seen["quali"] != seen["race"]
     assert seen["race_quali"] == seen["quali"]                   # siatka losowana z siły kwalifikacyjnej (przed kwalifikacjami)
     assert seen["quali_noise"] == 0.55                           # szum kwalifikacji z wag, nie stała na sztywno
+
+
+def test_weekend_context_gets_a_long_history_for_the_ratings(tmp_path, monkeypatch):
+    import run as run_module
+    seen = {}
+    real = run_module.build_context
+
+    def spy(*a, **kw):
+        seen["long"] = kw.get("long_history")
+        return real(*a, **kw)
+
+    monkeypatch.setattr(run_module, "build_context", spy)
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=2))
+    assert seen["long"] and {h.season for h in seen["long"]} >= {2026, 2027}
+    assert all((h.season, h.round) < (2027, 3) for h in seen["long"])               # przewidujemy rundę 3

@@ -84,6 +84,7 @@ def prepare_rounds(season: int, clients: "Clients", calendar: list[Race] | None 
     results = sorted((h for h in j.season_results(season, 9999) if h.results), key=lambda h: h.round)
     past = [h for s in range(season - HISTORY_SEASONS, season) for h in j.season_results(s, 9999) if h.results]
     history_pool = [h for h in past if h.season == season - 1] + results
+    long_history = past + results       # do rozgrzewki ocen siły; build_context odcina rundy nie wcześniejsze niż przewidywana
     wet = clients.wet(past + results)
     known = {e.driver_id: e for e in (j.entries(season) or j.entries(season - 1))}
     profiles = {**load_estimates(), **config.TRACK_PROFILE_OVERRIDES}
@@ -105,13 +106,13 @@ def prepare_rounds(season: int, clients: "Clients", calendar: list[Race] | None 
                                    start_temperature_c=temp) if temp is not None else None)
         pre = build_context(race, entries, history_pool, circuit_history, wet, standin, None, grid,
                             default_track_stats([], season), None, profiles, as_of_round=result.round,
-                            aggregates=aggregates)
+                            aggregates=aggregates, long_history=long_history)
         track = compute_track_stats(race.circuit_id, pre.circuit_history, None, season,
                                     config.TRACK_OVERRIDES.get(race.circuit_id),
                                     default_track_stats(pre.history + pre.circuit_history, season))
         ctx = build_context(race, entries, history_pool, circuit_history, wet, standin, None, grid, track,
                             profiles.get(race.circuit_id), profiles, as_of_round=result.round,
-                            aggregates=aggregates)
+                            aggregates=aggregates, long_history=long_history)
         dnf, sim_track = apply_early_season(dnf_rates(ctx), track, result.round)
         try:
             actual_quali = j.qualifying_grid(season, result.round)

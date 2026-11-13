@@ -205,6 +205,7 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
         raise JolpicaError("brak listy kierowców")
     history = [h for h in j.season_results(season - 1, 99) + (j.season_results(season, race.round - 1)
                                                               if race.round > 1 else []) if h.results]
+    older = [h for s in range(season - HISTORY_SEASONS, season - 1) for h in j.season_results(s, 99) if h.results]
     circuit_history = [h for h in j.circuit_history(race.circuit_id, list(range(season - HISTORY_SEASONS, season + 1)))
                        if h.results]
     latest = max(history, key=lambda h: (h.season, h.round), default=None)
@@ -237,7 +238,8 @@ def _predict_weekend(race: Race, season: int, now_utc: datetime, clients: Client
     profiles, new_cache = _collect_profiles(f1, needed, profile_cache, race.circuit_id)
 
     ctx = build_context(race, entries, history, circuit_history, wet, weather, practice, None, track,
-                        profiles.get(race.circuit_id), profiles, as_of_round=race.round, aggregates=aggregates)
+                        profiles.get(race.circuit_id), profiles, as_of_round=race.round, aggregates=aggregates,
+                        long_history=older + history)
     combined = combine_side(ctx, ALL_FACTORS, weights, "race")            # siła wyścigowa
     quali_combined = combine_side(ctx, ALL_FACTORS, weights, "quali")     # siła kwalifikacyjna (jedno okrążenie)
     drivers = [e.driver_id for e in entries]
