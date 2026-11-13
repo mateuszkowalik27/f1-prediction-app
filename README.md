@@ -201,6 +201,23 @@ rozkładów brzegowych pojedynczego kierowcy, więc używanymi miarami (RPS, log
 (`TEAM_NOISE_SHARE = 0`). Kalibracja `tau` przesunęła się z 0,70 do 0,90, czyli model jest po tej zmianie mniej zbyt pewny siebie.
 Punkt odniesienia po etapie 4 (średni RPS): przed kwal. 0,1202, po kwal. 0,1125, kwalifikacje 0,1066.
 
+### Etap 5: czynniki z sesji weekendu
+
+W weekendzie wyścigowym robot czyta (z OpenF1) sesje bieżącego weekendu i dodaje cztery czynniki. **Nie mają testu wstecznego**
+(nie odtwarzaliśmy treningów sprzed 2023), więc dostają umiarkowaną, stałą wagę i są **oceniane na bieżąco**:
+
+| Czynnik | Skąd | Do czego | Weekend |
+|---|---|---|---|
+| `fp2_long_run` (waga 0,10) | długie przejazdy z FP2 (min. 5 czystych okrążeń na jednej mieszance, korekta na paliwo i mieszanki) | siła wyścigowa | zwykły |
+| `fp3_quali_sim` (0,12) | najlepsze czyste okrążenie z FP3 po przesunięciu między mieszankami | siła kwalifikacyjna | zwykły |
+| `sprint_pace` (0,10) | czyste tempo okrążeń ze sprintu | siła wyścigowa | sprinterski |
+| `sq_quali` (0,15) | strata w kwalifikacjach sprintu | siła kwalifikacyjna głównych kwalifikacji | sprinterski |
+
+Brak sesji lub danych wyłącza czynnik (w weekendzie sprinterskim nie ma FP2 i FP3). **Ocena na bieżąco:** gdy są sygnały, robot zapisuje
+w `predictions/<sezon>-<runda>.json` dwie wersje zamrożonej prognozy, z czynnikami z sesji i bez nich (oraz przewidzianą kolejność
+kwalifikacji). Po wyścigu `model.json` pokazuje w `live_comparison` RPS obu wersji dla wyścigu i kwalifikacji (mniej = lepiej).
+**Decyzja po ok. 10 weekendach z sygnałami:** jeśli wersja z czynnikami nie jest wyraźnie lepsza, ustawiamy ich wagi na 0.
+
 ## Wyniki sesji w Kalendarzu
 
 Po rozwinięciu rundy zakończone sesje mają przycisk „Wyniki": treningi i kwalifikacje sprintu (najlepszy czas
