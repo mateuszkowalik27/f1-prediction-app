@@ -114,6 +114,33 @@ npm run build       # wersja produkcyjna do katalogu dist
 Czynniki, które wypadły, zostają w kodzie z wagą 0 i wpisem w `LOCKED_WEIGHTS` (`config.py`): można je wrócić, gdy
 będzie więcej wyścigów. Uwaga: `pit_stop` może częściowo wynikać z tego, że najlepsze zespoły mają też najlepsze załogi.
 
+## Jak oceniamy model (model v3, etap 1)
+
+Dawniej oceniliśmy model tylko po tym, czy dał dużo szans zwycięzcy: jedno pytanie na wyścig, a 24 wyścigi rocznie to za mało,
+żeby odróżnić zysk od szczęścia. Teraz używamy **RPS** (ranked probability score) dla **całej kolejności mety**: każdy z ok.
+20 kierowców dostaje karę tym większą, im dalej od prawdziwego miejsca był jego przewidywany rozkład (0 = idealnie, mniej =
+lepiej). Z jednego wyścigu mamy więc kilkanaście razy więcej informacji.
+
+Oceniamy **trzy rzeczy osobno**: prognozę *przed kwalifikacjami* (tę widzisz od wtorku do piątku), *po kwalifikacjach* (znana
+siatka) i samą *kolejność kwalifikacji*. Każde porównanie dwóch wersji modelu ma **przedział 90%** (bootstrap po wyścigach):
+zmiana jest „lepsza" tylko wtedy, gdy cały przedział leży po stronie poprawy, inaczej jest „niejednoznaczna" i zostaje stan
+dotychczasowy. Narzędzie: `python data-pipeline/oos.py` (raport) i `python data-pipeline/oos.py --factor NAZWA` (bramka czynnika).
+
+Punkt odniesienia (2026-11-13, wyścigi testowe 2024-2026, 68 wyścigów, średni RPS):
+
+| Zestaw wag | przed kwal. | po kwal. | kwalifikacje |
+|---|---|---|---|
+| bazowe (używa robot) | 0,1224 | 0,1147 | 0,1120 |
+| dostrojone walk-forward | 0,1254 | 0,1120 | 0,1171 |
+| sama siatka (siła = 0) | 0,1645 | 0,1178 | 0,1740 |
+
+- Model jest **wyraźnie lepszy od samej siatki** na wszystkich trzech poziomach (po kwalifikacjach różnica -0,0031, przedział
+  od -0,0045 do -0,0018; przed kwalifikacjami -0,042). Dawna miara (zwycięzca) tego nie wykazywała.
+- **Dostrojone wagi nie są lepsze**: poprawiają poziom, pod który je strojono (po kwalifikacjach, -0,0026), ale pogarszają
+  prognozy przed kwalifikacjami (+0,0030) i kwalifikacje (+0,0051). Dlatego robot używa teraz **wag bazowych**
+  (`USE_TUNED_WEIGHTS = False` w `config.py`). Zastrzeżenie: wagi bazowe były w v1 dobrane na sezonie 2026, więc dla niego
+  porównanie jest korzystne dla bazowych.
+
 ## Wyniki sesji w Kalendarzu
 
 Po rozwinięciu rundy zakończone sesje mają przycisk „Wyniki": treningi i kwalifikacje sprintu (najlepszy czas

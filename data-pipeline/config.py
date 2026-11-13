@@ -140,3 +140,11 @@ DEG_HIGH_RATIO = 1.25        # tor uznajemy za "wysokie zużycie", gdy jego pozi
 #   Uwaga: w teście wstecznym prognozę zastępowała faktyczna temperatura powietrza z wyścigu (lekko optymistycznie).
 # Punkt odniesienia po modelu v2 (poza próbką, 2026-11-12): Brier 2024 = 0,03623, 2025 = 0,03215, 2026 = 0,02549
 #   (średnio 0,03129 wobec 0,03218 przed v2); kalibracja tau = 0,8 (0,03163 -> 0,03145).
+
+# Punkt odniesienia v3 (2026-11-13, model v3 etap 1, średni RPS na wyścig, 68 wyścigów testowych 2024-2026, mniej = lepiej):
+#   zestaw         przed kwal.  po kwal.  kwalifikacje
+#   bazowe           0,1224      0,1147    0,1120     (używa robot)
+#   dostrojone       0,1254      0,1120    0,1171     (poprawa tylko tam, gdzie strojone; pogorszenie przed kwal. i w kwal.)
+#   sama siatka      0,1645      0,1178    0,1740
+#   Dostrojone vs bazowe: przed +0,0030 [+0,0023; +0,0038] WORSE, po -0,0026 [-0,0040; -0,0013] BETTER, kwal. +0,0051 WORSE
+#   => USE_TUNED_WEIGHTS = False (robot na wagach bazowych). Bazowe vs sama siatka: wyraźnie lepsze na wszystkich poziomach.
