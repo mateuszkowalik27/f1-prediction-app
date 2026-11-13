@@ -50,6 +50,7 @@ WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
 }
 LOCKED_WEIGHTS: set[str] = {"race_vs_quali", "tyre_deg_fit", "temp_fit"}   # wagi, których robot nie rusza
 TUNING_K = 8                       # im większe, tym ostrożniejsze strojenie
+USE_TUNED_WEIGHTS = False          # robot używa wag bazowych; strojenie (walk-forward, oos.py) zostaje jako narzędzie do porównań
 
 RECENCY_HALF_LIFE_YEARS = 3
 DEFAULT_SC_PROBABILITY = 0.55

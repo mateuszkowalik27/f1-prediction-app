@@ -306,6 +306,8 @@ def _live_evaluation(out_dir: Path, season: int, cases: list[RoundCase]):
 def _tuned_weights(out_dir: Path, cases: list[RoundCase], season: int) -> WeightsFile:
     """Wagi z weights.json; po każdej nowej rundzie (od MIN_ROUNDS) dostrajane od nowa z wartości z configu."""
     stored = _load_weights(out_dir)
+    if not config.USE_TUNED_WEIGHTS:
+        return stored.model_copy(update={"weights": config.default_weights()})   # historia strojenia zostaje, wagi bazowe
     if len(cases) < MIN_ROUNDS:
         return stored
     last_round = cases[-1].round

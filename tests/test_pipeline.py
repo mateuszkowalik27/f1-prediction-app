@@ -95,7 +95,8 @@ def test_actual_qualifying_shown_after_session(tmp_path):
     assert quali["d3"].win == 1.0 and quali["d1"].win == 0.0
 
 
-def test_reads_weights_json_when_present(tmp_path):
+def test_reads_weights_json_when_present(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "USE_TUNED_WEIGHTS", True)
     weights = {**config.FACTOR_WEIGHTS, "car_pace": 0.9, "grid_base_weight": 0.2, "race_noise_base": 1.1}
     (tmp_path / "weights.json").write_text(WeightsFile(
         weights=weights, history=[WeightSnapshot(round=2, weights=weights)]).model_dump_json())
@@ -147,7 +148,8 @@ def test_wet_flags_are_cached_between_runs(tmp_path):
     assert first > 0 and sum(seen) == 0          # za drugim razem wszystko z pliku wet_cache.json
 
 
-def test_weights_retuned_once_per_new_round(tmp_path):
+def test_weights_retuned_once_per_new_round(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "USE_TUNED_WEIGHTS", True)
     run_pipeline(tmp_path, 2027, NOW, clients(completed=3))
     stored = read(tmp_path, "weights.json", WeightsFile)
     assert [s.round for s in stored.history] == [3]
@@ -159,7 +161,8 @@ def test_weights_retuned_once_per_new_round(tmp_path):
     assert model.weights == stored.weights and len(model.weight_history) == 1
 
 
-def test_factors_without_backtest_data_are_not_tuned(tmp_path):
+def test_factors_without_backtest_data_are_not_tuned(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "USE_TUNED_WEIGHTS", True)
     run_pipeline(tmp_path, 2027, NOW, clients(completed=3))
     stored = read(tmp_path, "weights.json", WeightsFile)
     defaults = config.default_weights()
@@ -168,11 +171,23 @@ def test_factors_without_backtest_data_are_not_tuned(tmp_path):
 
 
 def test_locked_weight_from_config_is_not_tuned(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "USE_TUNED_WEIGHTS", True)
     monkeypatch.setattr(config, "LOCKED_WEIGHTS", {"car_pace", "grid_base_weight"})
     run_pipeline(tmp_path, 2027, NOW, clients(completed=3))
     stored = read(tmp_path, "weights.json", WeightsFile)
     assert stored.weights["car_pace"] == config.FACTOR_WEIGHTS["car_pace"]
     assert stored.weights["grid_base_weight"] == config.GRID_BASE_WEIGHT
+
+
+def test_base_weights_are_used_when_tuning_is_switched_off(tmp_path, monkeypatch):
+    # wynik etapu 1 modelu v3: dostrojone wagi poprawiają tylko poziom, pod który były strojone, a pogarszają prognozy sprzed kwalifikacji
+    monkeypatch.setattr(config, "USE_TUNED_WEIGHTS", False)
+    (tmp_path).mkdir(exist_ok=True)
+    stale = WeightsFile(weights={**config.default_weights(), "car_pace": 0.49}, history=[])
+    (tmp_path / "weights.json").write_text(stale.model_dump_json())           # stare dostrojone wagi z poprzednich przebiegów
+    run_pipeline(tmp_path, 2027, NOW, clients(completed=3))
+    model = read(tmp_path, "model.json", ModelPayload)
+    assert model.weights == config.default_weights()                            # robot ich nie używa
 
 
 def test_no_weights_file_before_three_rounds(tmp_path):
@@ -222,7 +237,8 @@ def test_resolve_season_waits_a_week_after_the_last_race_so_results_are_final():
     assert resolve_season(datetime(2026, 11, 28, tzinfo=UTC), j) == 2027            # ponad 7 dni po
 
 
-def test_weight_history_keeps_seasons_apart_and_does_not_retune_every_run(tmp_path):
+def test_weight_history_keeps_seasons_apart_and_does_not_retune_every_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "USE_TUNED_WEIGHTS", True)
     from tuning import append_snapshot
     old = append_snapshot(None, config.default_weights(), round=24, season=2026)
     (tmp_path / "weights.json").write_text(old.model_dump_json())
