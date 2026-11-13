@@ -247,7 +247,11 @@ TEAM_LINEAGE: dict[str, str] = {
     "racing_point": "force_india", "aston_martin": "racing_point", "alpine": "renault", "alphatauri": "toro_rosso",
     "rb": "alphatauri", "alfa": "sauber", "sauber": "alfa", "audi": "sauber",
 }
-RATING_TREND_GAIN = 0.0         # ile trendu (zmiany oceny auta w ostatnich wyścigach) dodać do oceny; 0 = bez trendu
+RATING_TREND_GAIN = 1.0         # ile trendu (zmiany oceny auta w ostatnich wyścigach) dodać do oceny; 0 = bez trendu
 RATING_TREND_ALPHA = 0.3       # wygładzanie trendu: waga najnowszej zmiany oceny
-RATING_SUPPLIER_WEIGHT = 0.0   # punkt startowy zespołu bez ocen: ta część średniej ocen zespołów z tym samym silnikiem (0 = wyłączone)
-RATING_USE_LINEAGE = False     # czy zespół pod nową nazwą dziedziczy ocenę poprzednika (TEAM_LINEAGE)
+RATING_SUPPLIER_WEIGHT = 0.5   # punkt startowy zespołu bez ocen: ta część średniej ocen zespołów z tym samym silnikiem (0 = wyłączone)
+RATING_USE_LINEAGE = True      # czy zespół pod nową nazwą dziedziczy ocenę poprzednika (TEAM_LINEAGE)
+# Bramka etapu 6 v3 (2026-11-14; RPS nowe - stare, przedział 90%, 68 wyścigów testowych; wagi wyścigu v3_core):
+#   trend (zysk 1,0, alfa 0,3): przed -0,00003 [-0,00005; -0,00001] BETTER, po -0,00001 -> WCHODZI (efekt bardzo mały; skan na 2022-2023: płaski, im większy zysk, tym minimalnie lepiej).
+#   dziedziczenie po poprzedniku (np. Audi po Sauberze): przed -0,00001, po -0,00003, oba nieoznaczone -> WŁĄCZONE (poprawność danych, nic nie pogarsza).
+#   punkt startowy z dostawcy silnika (waga 0,5): przed +0,00001, po +0,00001, nieoznaczone -> WŁĄCZONE (dotyczy zespołów bez ocen, np. Cadillac 2026; w danych testowych prawie nie występują).
